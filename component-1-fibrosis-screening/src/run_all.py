@@ -95,6 +95,31 @@ def net_benefit(y, treat, pt):
     return tp / len(y) - fp / len(y) * pt / (1 - pt)
 
 
+# ---------- fair comparison helpers ----------
+# A "rule-out" rule: patients whose score is below t are NOT scanned.
+def rule_out(score, t, y):
+    """% of patients sent for a scan, and % of sick patients missed."""
+    clear = score < t
+    return (round(100 * float((~clear).mean()), 1),
+            round(100 * float((clear & (y == 1)).sum() / y.sum()), 1))
+
+
+def threshold_for_miss_rate(score, y, target):
+    """Highest cut-off that misses at most `target` of the sick patients."""
+    sick = np.sort(score[y == 1])
+    return sick[int(np.floor(target * len(sick)))]
+
+
+def threshold_for_scan_budget(score, budget):
+    """Cut-off that sends about `budget` of patients for a scan."""
+    return np.quantile(score, 1 - budget)
+
+
+def fib4_age_adjusted_clear(f4, age):
+    """Guideline rule: low cut-off 1.30, or 2.0 for patients aged 65+."""
+    return np.where(age >= 65, f4 < 2.0, f4 < 1.30)
+
+
 def main():
     # ---------- Step 1: data ----------
     df = load_data()
@@ -160,8 +185,77 @@ def main():
         "fib4": zone_summary(zone_f, y_te),
         "model": zone_summary(zone_m, y_te),
     }
+    # ---------- Fair comparison with FIB-4 ----------
+    # Every cut-off is chosen on the CALIBRATION patients. The test patients
+    # are only used to report what happens, so neither side is tuned on them.
+    f4_cal = fib4(X_cal).values
+    fair = {}
+    for target in (0.05, 0.10):
+        t_f = threshold_for_miss_rate(f4_cal, y_cal, target)
+        t_m = threshold_for_miss_rate(p_cal, y_cal, target)
+        f_scan, f_miss = rule_out(f4, t_f, y_te)
+        m_scan, m_miss = rule_out(p_te, t_m, y_te)
+        fair[f"same_miss_target_{int(target * 100)}pct"] = {
+            "fib4": {"cutoff": round(float(t_f), 2), "scans_pct": f_scan, "miss_rate_pct": f_miss},
+            "model": {"cutoff": round(float(t_m), 3), "scans_pct": m_scan, "miss_rate_pct": m_miss},
+        }
+
+    # same number of scans as guideline FIB-4 (budget measured on calibration set)
+    budget = float((f4_cal >= 1.30).mean())
+    t_m = threshold_for_scan_budget(p_cal, budget)
+    f_scan, f_miss = rule_out(f4, 1.30, y_te)
+    m_scan, m_miss = rule_out(p_te, t_m, y_te)
+    fair["same_scans_as_guideline_fib4"] = {
+        "budget_pct_from_calibration_set": round(100 * budget, 1),
+        "fib4": {"cutoff": 1.30, "scans_pct": f_scan, "miss_rate_pct": f_miss},
+        "model": {"cutoff": round(float(t_m), 3), "scans_pct": m_scan, "miss_rate_pct": m_miss},
+    }
+
+    # guideline FIB-4 with age-adjusted low cut-off (2.0 for age 65+)
+    clear_age = fib4_age_adjusted_clear(f4, X_te.age.values)
+    fair["fib4_age_adjusted"] = {
+        "scans_pct": round(100 * float((~clear_age).mean()), 1),
+        "miss_rate_pct": round(100 * float((clear_age & (y_te == 1)).sum() / y_te.sum()), 1),
+    }
+
+    # what the model does with the patients FIB-4 calls "unsure"
+    grey = zone_f == "uncertain"
+    fair["fib4_grey_zone"] = {
+        "patients": int(grey.sum()),
+        "sick_patients": int(y_te[grey].sum()),
+        "model_cleared": int((grey & (zone_m == "clear")).sum()),
+        "sick_among_model_cleared": int((grey & (zone_m == "clear") & (y_te == 1)).sum()),
+        "model_unsure": int((grey & (zone_m == "uncertain")).sum()),
+        "model_referred": int((grey & (zone_m == "refer")).sum()),
+        "sick_among_model_referred": int((grey & (zone_m == "refer") & (y_te == 1)).sum()),
+    }
+    results["fair_comparison"] = fair
+
     print(json.dumps(results, indent=2))
     json.dump(results, open(os.path.join(OUT, "results.json"), "w"), indent=2)
+
+    # ---------- Trade-off chart: scans needed vs sick patients missed ----------
+    def curve(score):
+        pts = [rule_out(score, t, y_te) for t in np.unique(np.quantile(score, np.linspace(0, 1, 201)))]
+        return [a for a, b in pts], [b for a, b in pts]
+    plt.figure(figsize=(6.5, 5))
+    xs_f, ys_f = curve(f4)
+    xs_m, ys_m = curve(p_te)
+    plt.plot(xs_f, ys_f, "--", color="black", label="FIB-4 (any cut-off)")
+    plt.plot(xs_m, ys_m, "-", color="black", label=f"Model: {chosen} (any cut-off)")
+    s_g, m_g = rule_out(f4, 1.30, y_te)
+    plt.plot(s_g, m_g, "o", color="black", mfc="white", ms=9, label="FIB-4 guideline (1.30)")
+    plt.plot(fair["fib4_age_adjusted"]["scans_pct"], fair["fib4_age_adjusted"]["miss_rate_pct"],
+             "^", color="black", mfc="white", ms=9, label="FIB-4 age-adjusted")
+    zs = results["model"]
+    plt.plot(zs["scans_needed_pct"], zs["miss_rate_pct"], "s", color="black", ms=9,
+             label="Model: three-zone decision")
+    plt.xlabel("% of patients sent for a FibroScan")
+    plt.ylabel("% of sick patients missed")
+    plt.title("Scans needed vs sick patients missed (lower-left is better)")
+    plt.xlim(0, 100); plt.ylim(0, 100); plt.grid(color="0.85", lw=0.6)
+    plt.legend(fontsize=8); plt.tight_layout()
+    plt.savefig(os.path.join(OUT, "tradeoff_curve.png"), dpi=200); plt.close()
 
     # ---------- charts (black and white) ----------
     plt.figure(figsize=(5, 5))
@@ -203,10 +297,18 @@ def main():
     plt.tight_layout(); plt.savefig(os.path.join(OUT, "shap_summary.png"), dpi=200); plt.close()
 
     # ---------- Step 7: one example patient card ----------
-    i = int(np.argmax(p_te))            # show the highest-risk test patient
+    # Illustrative example: a patient FIB-4 calls "unsure" (1.30-2.67) whom the
+    # model refers; of those, the one with the median model risk.
+    # Chosen without looking at the true label.
+    cand = np.where(grey & (zone_m == "refer"))[0]
+    if len(cand) == 0:
+        cand = np.where(grey)[0]
+    cand = cand[np.argsort(p_te[cand])]
+    i = int(cand[len(cand) // 2])
     top = np.argsort(-np.abs(sv[i]))[:3]
     words = {"clear": "NO SCAN", "uncertain": "UNSURE - scan to be safe", "refer": "SCAN"}
-    card = [f"Decision : {words[zone_m[i]]}",
+    card = ["Illustrative example (not evidence)",
+            f"Decision : {words[zone_m[i]]}",
             f"Risk     : {p_te[i]:.0%}",
             f"FIB-4    : {f4[i]:.2f} ({zone_f[i]})",
             "Main reasons:"]
