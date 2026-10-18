@@ -20,7 +20,7 @@ import os
 import numpy as np
 import pandas as pd
 
-DATA_SOURCE = "synthetic"          # <-- change to "nhanes" or "local"
+DATA_SOURCE = "nhanes"          # <-- change to "nhanes" or "local"
 STIFFNESS_CUTOFF_KPA = 8.0         # FibroScan stiffness treated as >= F2
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -68,7 +68,12 @@ def _nhanes():
     files. If a column name is reported missing, check that file's codebook.
     """
     d = os.path.join(DATA_DIR, "nhanes")
-    read = lambda name: pd.read_sas(os.path.join(d, name + ".XPT"))
+    files = {f.upper(): f for f in os.listdir(d)}           # accepts .xpt or .XPT
+
+    def read(name):
+        if name + ".XPT" not in files:
+            raise FileNotFoundError(f"{name}.xpt not found in {d}")
+        return pd.read_sas(os.path.join(d, files[name + ".XPT"]), format="xport")
     df = read("P_DEMO")[["SEQN", "RIDAGEYR", "RIAGENDR"]]
     for name, cols in [("P_BMX", ["BMXBMI", "BMXWAIST"]),
                        ("P_BIOPRO", ["LBXSASSI", "LBXSATSI", "LBXSGTSI", "LBXSAL", "LBXSTR"]),
