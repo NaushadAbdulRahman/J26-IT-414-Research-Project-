@@ -20,3 +20,14 @@ def shap_values_for(pipe, X_background, X):
     if sv.ndim == 3:                                # random forest: one slice per class
         sv = sv[:, :, 1] if sv.shape[2] == 2 else sv[1]
     return sv
+
+
+def shap_base_value(pipe, X_background):
+    """The model's average output (log-odds) that every patient's SHAP values start from."""
+    pre, clf = pipe[:-1], pipe[-1]
+    bg = pre.transform(X_background)
+    if hasattr(clf, "coef_"):
+        ev = shap.LinearExplainer(clf, bg).expected_value
+    else:
+        ev = shap.TreeExplainer(clf).expected_value
+    return float(np.atleast_1d(ev)[-1])             # last entry = "has fibrosis" class
