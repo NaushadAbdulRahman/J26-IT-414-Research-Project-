@@ -10,6 +10,9 @@ VALIDATION = {
     "age_adjusted": "Passed BH on all patients. Held up on unseen patients in 0 of 20 splits. Candidate, not proven.",
 }
 
+# Referral bar = share of fibrosis among patients FIB-4 refers (from the audit, compare_bars.py).
+BAR = {"flat": 0.275, "age_adjusted": 0.316}
+
 
 def patient_labels(age, sex, bmi, ast, alt, platelets):
     """Put one patient into the fixed bins, written like the group names (e.g. 'bmi >=35')."""
@@ -37,6 +40,7 @@ def check_patient(age, sex, bmi, ast, alt, platelets, rule="flat"):
     if sex not in ("male", "female"):
         return {"status": "invalid", "reason": "sex must be 'male' or 'female'"}
     result["flags"] = []
+    result["bar"] = BAR[rule]
     if not result["cleared"]:
         result["message"] = "FIB-4 refers this patient for a scan."
         return result
@@ -46,6 +50,8 @@ def check_patient(age, sex, bmi, ast, alt, platelets, rule="flat"):
             result["flags"].append({
                 "group": row["group"],
                 "share_among_cleared": round(float(row["share_among_cleared"]), 3),
+                "cleared": int(row["cleared"]),
+                "wrongly_cleared": int(row["wrongly_cleared"]),
                 "p_adjusted": float(row["p_adjusted"]),
             })
     result["flags"].sort(key=lambda f: f["p_adjusted"])

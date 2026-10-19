@@ -50,8 +50,9 @@ if st.button("Check patient"):
         top = r["flags"][0]
         st.error("FIB-4 clears this patient, but they match a candidate red flag.")
         st.write(f"**Strongest matching group:** {top['group']}")
-        st.write(f"In the audit, {top['share_among_cleared']:.0%} of cleared patients in this group "
-                 f"had fibrosis (the audit's comparison level was about 27-32%).")
+        st.write(f"In the audit, **{top['wrongly_cleared']} of {top['cleared']}** cleared patients in this "
+                 f"group had fibrosis ({top['share_among_cleared']:.0%}). "
+                 f"The comparison bar for this rule is {r['bar']:.1%}.")
         st.caption(r["message"])
         if len(r["flags"]) > 1:
             with st.expander(f"{len(r['flags']) - 1} related groups (nested versions of the same finding)"):
