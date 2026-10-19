@@ -11,8 +11,10 @@ Decides who needs a FibroScan from routine clinical data, and compares itself wi
 - src/load_data.py : where the data comes from. THE ONLY FILE TO CHANGE for new data.
 - src/run_all.py   : the pipeline (model, calibration, decision layer, SHAP, FIB-4 comparison).
 - src/explain.py   : SHAP reasons for whichever model is chosen.
-- src/app.py       : the screening app (pages listed below).
-- src/screening.py : decision logic the app uses (same rules as run_all.py).
+- src/app.py       : runs the screening app on its own (`streamlit run src/app.py`).
+- src/views.py     : the app's screens; also shown as a page in the group app
+                     (app/pages/1_Component_1_Fibrosis_Referral.py, run `streamlit run app/Home.py` from the repo root).
+- src/screening.py : decision logic the app uses (same rules as run_all.py); FIB-4 comes from the group's shared/fib4.py when available.
 - src/ui.py        : how the app looks (colours, type, the FIB-4 vs tool scales).
 - src/fonts/       : Atkinson Hyperlegible typeface (SIL Open Font License), bundled so the app works offline.
 - .streamlit/config.toml : app colours.

@@ -52,10 +52,27 @@ header[data-testid="stHeader"] {{ background: transparent; }}
 /* inputs read like a lab request form */
 [data-testid="stForm"] {{ border: 0; padding: 0; background: transparent; }}
 [data-testid="stNumberInputStepDown"], [data-testid="stNumberInputStepUp"] {{ display: none; }}
-.stApp input {{ font-variant-numeric: tabular-nums; font-size: 17px !important; }}
+/* no "Press Enter to submit form" hint drawn over the value */
+[data-testid="InputInstructions"] {{ display: none !important; }}
+/* every field the same: one height, one inset, one text size, so values line up in a column */
+.stApp [data-testid="stNumberInputContainer"], .stApp [data-testid="stTextInputRootElement"],
+.stApp .stSelectbox .react-aria-ComboBox > div {{ height: 44px; min-height: 44px; border-radius: 6px; }}
+.stApp [data-testid="stNumberInputField"], .stApp [data-testid="stTextInputField"],
+.stApp .stSelectbox input {{ height: 44px; padding: 0 12px !important; font-size: 16px !important;
+  line-height: 44px; font-variant-numeric: tabular-nums; }}
+.stApp [data-testid="stTextInputField"]::placeholder {{ color: #8A979D; }}
 [data-testid="stWidgetLabel"] p {{ color: {MUTED}; font-size: 14px; }}
+[data-testid="stWidgetLabel"] {{ min-height: 0; margin-bottom: 2px; }}
 .stButton button, .stFormSubmitButton button, .stDownloadButton button {{
-  border-radius: 6px; font-weight: 700; }}
+  border-radius: 6px; font-weight: 700; min-height: 46px; }}
+.stButton button p, .stFormSubmitButton button p, .stDownloadButton button p {{ font-size: 16px; font-weight: 700; }}
+/* primary button in ink, also when the shared app's theme is used */
+.stApp button[kind="primary"], .stApp button[kind="primaryFormSubmit"] {{
+  background: {INK}; border-color: {INK}; color: #FFFFFF; }}
+/* tabs (when shown inside the shared app) */
+.stApp [data-baseweb="tab-highlight"], .stApp .react-aria-SelectionIndicator {{ background-color: {INK} !important; }}
+.stApp [role="tab"][aria-selected="true"] p {{ color: {INK} !important; font-weight: 700; }}
+.stApp [role="tab"] p {{ font-size: 16px !important; }}
 
 /* our own blocks */
 .stApp .fx-title {{ font-size: 34px !important; font-weight: 700; line-height: 1.15 !important; margin: 0 0 8px; color: {INK}; letter-spacing: -0.01em; }}
@@ -66,9 +83,9 @@ header[data-testid="stHeader"] {{ background: transparent; }}
   font-size: 16px; line-height: 1.5; }}
 .fx-decision {{ border-left: 6px solid var(--z); background: var(--t); padding: 18px 22px;
   border-radius: 0 8px 8px 0; }}
-.fx-decision h2 {{ font-size: 30px; line-height: 1.15; margin: 0; color: var(--z); font-weight: 700; padding: 0; }}
+.fx-decision h2 {{ font-size: 26px; line-height: 1.15; margin: 0; color: var(--z); font-weight: 700; padding: 0; }}
 .fx-decision p {{ margin: 6px 0 0; font-size: 16px; color: {INK}; }}
-.fx-risk {{ display: flex; align-items: baseline; gap: 14px; margin: 22px 0 4px; }}
+.fx-risk {{ display: flex; align-items: baseline; gap: 14px; margin: 22px 0 18px; }}
 .fx-risk b {{ font-size: 56px; line-height: 1; font-variant-numeric: tabular-nums; }}
 .fx-risk span {{ color: {MUTED}; font-size: 16px; max-width: 30ch; line-height: 1.35; }}
 .fx-scales {{ margin: 18px 0 8px; }}

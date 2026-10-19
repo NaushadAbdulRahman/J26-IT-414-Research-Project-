@@ -25,7 +25,18 @@ UNITS = {"age": "years", "bmi": "kg/m²", "waist": "cm", "ast": "U/L", "alt": "U
 FIB4_NEEDS = ["age", "ast", "alt", "platelets"]
 
 
+try:
+    # The group's shared FIB-4 formula (shared/fib4.py), so every component agrees.
+    from shared.fib4 import fib4 as fib4_one
+except ImportError:          # running this component on its own, outside the shared repo layout
+    fib4_one = None
+
+
 def fib4(df):
+    """FIB-4 for every row: (age x AST) / (platelets x sqrt(ALT))."""
+    if fib4_one is not None:
+        return pd.Series([fib4_one(a, s, l, p) for a, s, l, p in
+                          zip(df["age"], df["ast"], df["alt"], df["platelets"])], index=df.index)
     return (df["age"] * df["ast"]) / (df["platelets"] * np.sqrt(df["alt"]))
 
 
