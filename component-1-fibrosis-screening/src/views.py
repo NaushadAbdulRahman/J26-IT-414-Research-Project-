@@ -38,12 +38,14 @@ def get_screener():
 # Example patients: real, de-identified NHANES test-set patients
 EXAMPLES = {
     "Enter values myself": None,
-    "Example A: low risk": dict(age=31, sex="Male", bmi=25.3, waist=94.9, diabetes="No", ast=23.0,
-                                alt=26.0, ggt=25.0, platelets=416.0, albumin=4.1, hba1c=5.8, triglycerides=203.0),
-    "Example B: tool uncertain": dict(age=72, sex="Male", bmi=27.6, waist=111.6, diabetes="No", ast=17.0,
-                                      alt=13.0, ggt=12.0, platelets=239.0, albumin=4.1, hba1c=6.0, triglycerides=129.0),
-    "Example C: FIB-4 uncertain, tool refers": dict(age=46, sex="Male", bmi=29.9, waist=104.1, diabetes="No", ast=62.0,
-                                                    alt=99.0, ggt=72.0, platelets=140.0, albumin=4.5, hba1c=5.6, triglycerides=92.0),
+    "Example A: low risk": dict(age=23, sex="Male", bmi=27.6, waist=89.8, diabetes="No", ast=29.0,
+                                alt=85.0, ggt=95.0, platelets=299.0, albumin=4.7, hba1c=5.4, triglycerides=94.0),
+    "Example B: FIB-4 clears, tool unsure": dict(age=59, sex="Female", bmi=41.8, waist=116.8, diabetes="No",
+                                                 ast=17.0, alt=22.0, ggt=28.0, platelets=284.0, albumin=4.4,
+                                                 hba1c=5.6, triglycerides=115.0),
+    "Example C: FIB-4 uncertain, tool refers": dict(age=70, sex="Male", bmi=34.6, waist=121.3, diabetes="Yes",
+                                                    ast=26.0, alt=25.0, ggt=79.0, platelets=224.0, albumin=3.7,
+                                                    hba1c=7.0, triglycerides=63.0),
 }
 DEFAULT = dict(age=55, sex="Male", bmi=29.0, waist=98.0, diabetes="No", ast=38.0, alt=42.0,
                ggt=45.0, platelets=210.0, albumin=4.2, hba1c=6.0, triglycerides=150.0)
@@ -275,7 +277,7 @@ def page_batch():
         def colour(val):
             for z, h in ui.HEADLINE.items():
                 if val == h:
-                    return f"color:{ui.ZONE[z]};font-weight:700"
+                    return f"color:{ui.zone_hex(z)};font-weight:700"
             return ""
         styler = shown.style.format({"Risk %": "{:.1f}", "FIB-4": "{:.2f}"})
         styler = (styler.map if hasattr(styler, "map") else styler.applymap)(colour, subset=["Decision"])
@@ -306,15 +308,24 @@ def page_performance():
         ui.empty("No results yet. Run <code>python src/run_all.py</code> to produce them.")
         return
     r = json.load(open(path))
-    fc = r.get("fair_comparison", {})
-    sick = round(r["fib4"]["sick_patients_missed"] / r["fib4"]["miss_rate_pct"] * 100) if r["fib4"]["miss_rate_pct"] else 0
-    same = fc.get("same_scans_as_guideline_fib4")
-    lede = (f"Tested on {r['n_test']:,} patients from {r['data_source'].upper()} that the model never saw, "
-            f"{sick} of them with significant fibrosis. ")
-    if same:
-        lede += (f"With the same number of scans as FIB-4, FIB-4 missed {same['fib4']['miss_rate_pct']:.0f}% "
-                 f"of them and this tool missed {same['model']['miss_rate_pct']:.0f}%.")
-    ui.title("How it compares with FIB-4", lede)
+    if "guarantee_stress_test" not in r:
+        ui.title("Model performance")
+        ui.empty("These results are from an older run. Run <code>python src/run_all.py</code> again.")
+        return
+    ci = r["uncertainty_95ci"]
+    who = "patients with fatty liver" if r.get("cohort") == "masld" else "adults"
+    ui.title("How it compares with FIB-4",
+             f"Tested on {r['n_test']:,} {who} from {r['data_source'].upper()} that the model never saw, "
+             f"{r['n_test_with_fibrosis']} of them with significant fibrosis (FibroScan 8 kPa or more).")
+
+    ui.stats([
+        ("Sick patients missed", f"{r['fib4']['miss_rate_pct']:.0f}%", f"{r['model']['miss_rate_pct']:.0f}%",
+         f"tool 95% CI {ci['model_miss_rate_pct_95ci'][0]:.0f} to {ci['model_miss_rate_pct_95ci'][1]:.0f}%"),
+        ("Sent for a FibroScan", f"{r['fib4']['scans_needed_pct']:.0f}%", f"{r['model']['scans_needed_pct']:.0f}%",
+         "tool includes the uncertain group"),
+        ("AUROC (1.0 = perfect)", f"{r['auroc']['fib4']:.2f}", f"{r['auroc']['model']:.2f}",
+         f"difference 95% CI {ci['auroc_difference_95ci'][0]:.2f} to {ci['auroc_difference_95ci'][1]:.2f}"),
+    ])
 
     left, right = st.columns([1.15, 0.85], gap="large")
     with left:
@@ -324,55 +335,125 @@ def page_performance():
             st.caption("Every possible cut-off for each method. Lower and further left is better: "
                        "fewer sick patients missed for fewer scans.")
     with right:
-        ui.group("Side by side")
-        rows = [("AUROC", f"{r['auroc']['fib4']:.3f}", f"{r['auroc']['model']:.3f}")]
-        if fc:
-            tgt = fc["same_miss_target_10pct"]
-            rows += [("Missed, same number of scans", f"{same['fib4']['miss_rate_pct']:.1f}%", f"{same['model']['miss_rate_pct']:.1f}%"),
-                     ("Scanned, at most 10% missed", f"{tgt['fib4']['scans_pct']:.1f}%", f"{tgt['model']['scans_pct']:.1f}%"),
-                     ("Missed, at most 10% target", f"{tgt['fib4']['miss_rate_pct']:.1f}%", f"{tgt['model']['miss_rate_pct']:.1f}%")]
-        st.dataframe(pd.DataFrame(rows, columns=["Measure", "FIB-4", "This tool"]), hide_index=True, width="stretch")
+        fc = r["fair_comparison"]
+        same, tgt = fc["same_scans_as_guideline_fib4"], fc["same_miss_target_10pct"]
+        ui.group("Fair comparisons")
+        st.dataframe(pd.DataFrame([
+            ("Missed, same number of scans", f"{same['fib4']['miss_rate_pct']:.0f}%", f"{same['model']['miss_rate_pct']:.0f}%"),
+            ("Scans needed, at most 10% missed", f"{tgt['fib4']['scans_pct']:.0f}%", f"{tgt['model']['scans_pct']:.0f}%"),
+            ("Missed, FIB-4 age-adjusted rule", f"{fc['fib4_age_adjusted']['miss_rate_pct']:.0f}%", "-"),
+        ], columns=["Comparison", "FIB-4", "This tool"]), hide_index=True, width="stretch")
+        st.caption("Cut-offs are set on separate calibration patients, never on the test patients.")
+        g = fc["fib4_grey_zone"]
+        ui.group("FIB-4's uncertain zone")
+        st.write(f"FIB-4 was unsure about {g['patients']} patients. The tool cleared {g['model_cleared']} of them "
+                 f"({g['sick_among_model_cleared']} sick) and referred {g['model_referred']} "
+                 f"({g['sick_among_model_referred']} sick).")
         ui.group("Chosen model")
-        cv = r.get("cross_validated_auroc_on_training_data", {})
-        st.write(f"{r['chosen_model']}, picked from {len(cv)} models by cross-validation on the "
-                 "training data. The simpler model is kept when scores are within 0.01.")
-        st.dataframe(pd.DataFrame({"Model": list(cv), "Cross-validated AUROC": list(cv.values())}),
-                     hide_index=True, width="stretch")
+        st.write(f"{r['chosen_model']}, picked from 3 by cross-validation on the training data "
+                 f"(simplest within 0.01). Calibration: {r.get('calibration_method', 'isotonic')}, also chosen "
+                 "on training data.")
+
+    ui.group("Research questions")
+    stress = r["guarantee_stress_test"]
+    cvd = r["composite_vs_decomposed"]
+    sa = r["shap_alignment"]
+    top = ", ".join(NAMES[x["feature"]] for x in sa["ranking"][:sa["top_k"]])
+    budget = {row["budget_pct"]: row for row in r["scan_budget"]}
+    b40 = budget.get(40) or r["scan_budget"][len(r["scan_budget"]) // 2]
+    answers = [
+        ("RQ1. Is the safety bound kept?",
+         f"Yes, on average. Over {stress['repeats']} new splits the tool missed {stress['mean_miss_rate_pct']:.1f}% "
+         f"of sick patients on average (allowed {stress['allowed_miss_rate_pct']:.0f}%). Single splits vary "
+         f"({stress['miss_rate_pct_range_5_to_95'][0]:.0f} to {stress['miss_rate_pct_range_5_to_95'][1]:.0f}%) "
+         "because each holds only about 100 sick patients.", "guarantee_stress_test.png"),
+        ("RQ2. At that safety level, fewer scans than FIB-4?",
+         f"Not fewer than guideline FIB-4, which scans only {r['fib4']['scans_needed_pct']:.0f}% but misses "
+         f"{r['fib4']['miss_rate_pct']:.0f}% of sick patients. To miss at most 10%, FIB-4 would need "
+         f"{tgt['fib4']['scans_pct']:.0f}% scans; the tool needs {tgt['model']['scans_pct']:.0f}%. "
+         f"With scans limited to {b40['budget_pct']}%, the tool misses {b40['model']['miss_rate_pct']:.0f}% "
+         f"against FIB-4's {b40['fib4']['miss_rate_pct']:.0f}%.", "scan_budget.png"),
+        ("RQ3. Do FIB-4's parts work better than the score?",
+         "No clear difference. Test AUROC: " + "; ".join(f"{k.split(':')[0]} {v['test_auroc']:.2f}" for k, v in cvd.items())
+         + ". The gain comes from adding the other results, not from splitting FIB-4.", None),
+        ("RQ4. Do the explanations make clinical sense?",
+         f"Yes. The top {sa['top_k']} drivers by SHAP are {top}: {sa['recognised_in_top_k']} of {sa['top_k']} are "
+         "recognised fibrosis risk factors.", "shap_summary.png"),
+    ]
+    for q, a_text, img in answers:
+        with st.expander(q, expanded=False):
+            st.write(a_text)
+            if q.startswith("RQ3"):
+                st.dataframe(pd.DataFrame([{"Inputs": k, "CV AUROC (training)": v["cv_auroc_training"],
+                                            "Test AUROC": v["test_auroc"], "Test Brier": v["test_brier"]}
+                                           for k, v in cvd.items()]), hide_index=True, width="stretch")
+            if img and os.path.exists(os.path.join(OUTPUTS, img)):
+                st.image(os.path.join(OUTPUTS, img), width=620)
+
+    ui.group("Benchmarks and checks")
+    ub, cal, sens, ext = r["uncalibrated_benchmark"], r["calibration"], r.get("sensitivity_all_adults"), r.get("external_validation")
+    rows = [("Uncalibrated model, usual 50% cut-off", f"{ub['default_cutoff_0_5']['scans_pct']:.0f}%",
+             f"{ub['default_cutoff_0_5']['miss_rate_pct']:.0f}%"),
+            ("Uncalibrated model + decision layer", f"{ub['with_decision_layer']['scans_pct']:.0f}%",
+             f"{ub['with_decision_layer']['miss_rate_pct']:.0f}%"),
+            ("This tool (calibrated + decision layer)", f"{r['model']['scans_needed_pct']:.0f}%",
+             f"{r['model']['miss_rate_pct']:.0f}%")]
+    if sens:
+        rows.append((f"All adults, not only fatty liver ({sens['patients']:,})",
+                     f"{sens['model_three_zone']['scans_pct']:.0f}%", f"{sens['model_three_zone']['miss_rate_pct']:.0f}%"))
+    if ext:
+        rows.append((f"Second NHANES dataset 2021-2023 ({ext['patients']:,})",
+                     f"{ext['model_three_zone']['scans_pct']:.0f}%", f"{ext['model_three_zone']['miss_rate_pct']:.0f}%"))
+    st.dataframe(pd.DataFrame(rows, columns=["Setting", "Scanned", "Sick missed"]), hide_index=True, width="stretch")
+    if not ext:
+        st.caption("External check on the second NHANES dataset (2021-2023): ready to run once its files are in "
+                   "data/nhanes_2021/.")
+    st.dataframe(pd.DataFrame([
+        {"": "Before calibration", **{k.replace("_", " ").capitalize(): v for k, v in cal["uncalibrated"].items()}},
+        {"": "After calibration", **{k.replace("_", " ").capitalize(): v for k, v in cal["calibrated"].items()}},
+    ]), hide_index=True, width="stretch")
+    st.caption("Brier score and ECE: lower is better. Calibration slope: 1 is ideal; intercept: 0 is ideal.")
 
     for f, title, note in [
         ("calibration_curve.png", "Calibration: does a 20% risk mean 20%?",
          "Points on the dotted line mean the predicted risk matches what was observed."),
         ("decision_curve.png", "Decision curve: is it worth using?",
-         "Higher is better. Net benefit weighs sick patients caught against unnecessary scans."),
-        ("shap_summary.png", "Global SHAP: what drives the risk across all test patients",
-         "One dot per patient. Further right means that result raised the risk more. "
-         "Red is a high value, blue a low value.")]:
+         "Higher is better. Net benefit weighs sick patients caught against unnecessary scans.")]:
         fp = os.path.join(OUTPUTS, f)
         if os.path.exists(fp):
             with st.expander(title):
-                st.image(fp, width="stretch")
+                st.image(fp, width=620)
                 st.caption(note)
 
 
 def page_about():
+    r = {}
+    path = os.path.join(OUTPUTS, "results.json")
+    if os.path.exists(path):
+        r = json.load(open(path))
     ui.title("About this tool")
     ui.prose(f"""
-<p><b>What it does.</b> Decides whether a patient with fatty liver disease should be referred for a
-FibroScan, using 12 routine results. It gives a decision, an estimated risk, FIB-4 for comparison,
+<p><b>What it does.</b> Decides whether a patient with fatty liver disease (MASLD) should be referred
+for a FibroScan, using 12 routine results. It gives a decision, an estimated risk, FIB-4 for comparison,
 and the results that drove the decision.</p>
 <p><b>How it decides.</b> A {S.model_name.lower()} model, chosen from three by cross-validation,
-estimates the risk. The risk is calibrated, so 30% means about 30 in 100 such patients have
-fibrosis. A conformal decision layer sets two cut-offs so that at most about 10% of sick patients
-are cleared: no scan below {S.low:.1%} risk, scan above {S.high:.1%}, uncertain in between.</p>
+estimates the risk, and is then calibrated so that 30% means about 30 in 100 such patients have
+fibrosis. A conformal decision layer sets two cut-offs so that on average at most 10% of sick patients
+are cleared: no scan below {S.low:.1%} risk, scan above {S.high:.1%}, uncertain in between.
+Uncertain patients are referred, to be safe.</p>
 <p><b>What is SHAP?</b> SHAP (SHapley Additive exPlanations) splits one patient's prediction into
 a contribution from each result. Starting from the average patient, each result pushes the score up
 or down, and the pushes add up exactly to that patient's score.</p>
-<p><b>Data.</b> Developed on NHANES 2017 to March 2020 (US CDC). Significant fibrosis means liver
-stiffness of 8.0 kPa or more on FibroScan. To be recalibrated and validated on local patients.</p>
-<p><b>Limits.</b> US general-population data, not Sri Lankan clinic patients. Stiffness is not
-biopsy. Obesity affects both the model and the FibroScan reading. Not yet validated locally.</p>
+<p><b>Data.</b> NHANES 2017 to March 2020 (US CDC): {r.get('n_patients', 0):,} adults with fatty liver
+(CAP 275 dB/m or more) and at least one metabolic risk factor, with a reliable FibroScan. Significant
+fibrosis means liver stiffness of 8.0 kPa or more. Split 60/20/20 into training, calibration and test.</p>
+<p><b>Checks on what you type.</b> Required results, possible ranges, common unit mix-ups
+(g/L vs g/dL, mmol/mol vs %, mmol/L vs mg/dL) and a few cross-checks run before every screening.</p>
+<p><b>Limits.</b> US survey data, not Sri Lankan clinic patients. MASLD is approximated (alcohol and
+viral hepatitis are not checked). Stiffness is not biopsy. Obesity affects both the model and the
+FibroScan reading. To be recalibrated and validated on local patients.</p>
 <p><b>Research prototype. Not a medical device and not for clinical use.</b></p>
-<p style="color:{ui.MUTED}">Component 1, project J26-IT-414, IT23229884</p>
+<p style="color:{ui.V_MUTED}">Component 1, project J26-IT-414, IT23229884</p>
 """)
 
 
@@ -382,7 +463,7 @@ PAGES = [("Screen a patient", page_screen), ("Screen many patients", page_batch)
 
 def run(mode="sidebar"):
     global S, FEATURES
-    ui.style()
+    ui.style(own_sidebar=(mode == "sidebar"))
     try:
         S = get_screener()
     except FileNotFoundError:
@@ -397,9 +478,9 @@ def run(mode="sidebar"):
     if mode == "sidebar":
         with st.sidebar:
             ui.html('<p style="font-size:20px;font-weight:700;margin:0 0 2px">Fibrosis referral</p>'
-                    f'<p style="color:{ui.MUTED};font-size:14px;margin:0 0 18px">Who needs a FibroScan?</p>')
+                    f'<p style="color:{ui.V_MUTED};font-size:14px;margin:0 0 18px">Who needs a FibroScan?</p>')
             choice = st.radio("Page", [name for name, _ in PAGES], label_visibility="collapsed")
-            ui.html(f'<p style="color:{ui.MUTED};font-size:13px;line-height:1.5;margin-top:28px">'
+            ui.html(f'<p style="color:{ui.V_MUTED};font-size:13px;line-height:1.5;margin-top:28px">'
                     f'Model: {S.model_name}, trained on {S.data_source.upper()}.<br>'
                     f'No scan below {S.low:.1%} risk, scan above {S.high:.1%}.<br><br>'
                     'Research prototype. Not for clinical use.</p>')

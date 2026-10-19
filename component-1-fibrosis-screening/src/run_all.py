@@ -17,7 +17,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import shap
 from xgboost import XGBClassifier
-from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+from sklearn.model_selection import train_test_split, cross_val_score, cross_val_predict, StratifiedKFold
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import make_pipeline
@@ -30,6 +30,7 @@ from sklearn.metrics import roc_auc_score, brier_score_loss
 import load_data as ld
 from load_data import load_data, FEATURES
 from explain import shap_values_for
+import analyses as an
 
 ALPHA = 0.10      # allowed miss rate: at most 10% of sick patients may be cleared
 SEED = 42
@@ -120,11 +121,37 @@ def fib4_age_adjusted_clear(f4, age):
     return np.where(age >= 65, f4 < 2.0, f4 < 1.30)
 
 
+def all_adults_check(pipeline, cal_method="isotonic"):
+    """Sensitivity analysis: the same method on ALL adults with a reliable scan,
+    not only those with fatty liver."""
+    if ld.DATA_SOURCE != "nhanes":
+        return None
+    saved, ld.COHORT = ld.COHORT, "all"
+    try:
+        d = load_data()
+    finally:
+        ld.COHORT = saved
+    X, y = d[FEATURES], d["label"].values
+    X_tr, X_tmp, y_tr, y_tmp = train_test_split(X, y, test_size=0.4, stratify=y, random_state=SEED)
+    X_cal, X_te, y_cal, y_te = train_test_split(X_tmp, y_tmp, test_size=0.5, stratify=y_tmp, random_state=SEED)
+    m = (clone(pipeline) if cal_method == "none" else
+         CalibratedClassifierCV(clone(pipeline), method=cal_method, cv=5)).fit(X_tr, y_tr)
+    pc, pt = m.predict_proba(X_cal)[:, 1], m.predict_proba(X_te)[:, 1]
+    qp, qn = conformal_thresholds(pc, y_cal, ALPHA)
+    f4 = fib4(X_te).values
+    s_m, m_m = an.scans_and_misses(an.cleared_by_model(pt, qp, qn), y_te)
+    s_f, m_f = an.scans_and_misses(f4 < 1.30, y_te)
+    return {"patients": int(len(y)), "with_fibrosis": int(y.sum()),
+            "auroc": {"model": round(roc_auc_score(y_te, pt), 3), "fib4": round(roc_auc_score(y_te, f4), 3)},
+            "model_three_zone": {"scans_pct": s_m, "miss_rate_pct": m_m},
+            "fib4_guideline_1_30": {"scans_pct": s_f, "miss_rate_pct": m_f}}
+
+
 def main():
     # ---------- Step 1: data ----------
     df = load_data()
     X, y = df[FEATURES], df["label"].values
-    print(f"Data source: {ld.DATA_SOURCE} | patients: {len(df)} | "
+    print(f"Data source: {ld.DATA_SOURCE} ({ld.COHORT}) | patients: {len(df)} | "
           f"with fibrosis: {y.mean():.1%}")
 
     # ---------- Step 2: split (test set is locked away until the end) ----------
@@ -156,9 +183,20 @@ def main():
     print("Chosen model:", chosen)
 
     # ---------- Step 4: calibration ----------
+    # Calibration makes "30% risk" mean about 30 in 100. Which method to use is
+    # decided like the model: by 5-fold cross-validated Brier score on the TRAINING
+    # data only (lower is better). "none" is allowed to win if calibrating does not help.
     raw = clone(candidates[chosen]).fit(X_tr, y_tr)        # uncalibrated, for comparison + SHAP
-    model = CalibratedClassifierCV(clone(candidates[chosen]), method="isotonic",
-                                   cv=5).fit(X_tr, y_tr)
+    makers = {"none": lambda: clone(candidates[chosen]),
+              "sigmoid": lambda: CalibratedClassifierCV(clone(candidates[chosen]), method="sigmoid", cv=5),
+              "isotonic": lambda: CalibratedClassifierCV(clone(candidates[chosen]), method="isotonic", cv=5)}
+    cal_cv = {k: float(brier_score_loss(y_tr, cross_val_predict(f(), X_tr, y_tr, cv=cv,
+                                                                method="predict_proba")[:, 1]))
+              for k, f in makers.items()}
+    cal_method = min(cal_cv, key=cal_cv.get)
+    print("Cross-validated Brier by calibration method:", {k: round(v, 4) for k, v in cal_cv.items()},
+          "-> chosen:", cal_method)
+    model = raw if cal_method == "none" else makers[cal_method]().fit(X_tr, y_tr)
 
     p_cal = model.predict_proba(X_cal)[:, 1]
     p_te = model.predict_proba(X_te)[:, 1]
@@ -174,9 +212,16 @@ def main():
 
     results = {
         "data_source": ld.DATA_SOURCE,
+        "cohort": ld.COHORT,
+        "n_patients": int(len(y)),
+        "n_with_fibrosis": int(y.sum()),
+        "split": {"train": int(len(y_tr)), "calibration": int(len(y_cal)), "test": int(len(y_te))},
         "n_test": int(len(y_te)),
+        "n_test_with_fibrosis": int(y_te.sum()),
         "allowed_miss_rate_pct": 100 * ALPHA,
         "chosen_model": chosen,
+        "calibration_method": cal_method,
+        "cross_validated_brier_by_calibration_method": {k: round(v, 4) for k, v in cal_cv.items()},
         "cross_validated_auroc_on_training_data": {k: round(v, 3) for k, v in cv_auroc.items()},
         "auroc": {"fib4": round(roc_auc_score(y_te, f4), 3),
                   "model": round(roc_auc_score(y_te, p_te), 3)},
@@ -230,6 +275,20 @@ def main():
         "sick_among_model_referred": int((grey & (zone_m == "refer") & (y_te == 1)).sum()),
     }
     results["fair_comparison"] = fair
+
+    # ---------- Proposal objectives and research questions ----------
+    print("Running the extra analyses (bootstrap, stress test, budgets, RQ3)...")
+    cleared_m, cleared_f = zone_m == "clear", f4 < 1.30
+    results["uncertainty_95ci"] = an.uncertainty(y_te, p_te, f4, cleared_m, cleared_f)
+    results["calibration"] = an.calibration_report(y_te, p_raw, p_te)
+    results["uncalibrated_benchmark"] = an.uncalibrated_benchmark(raw, X_cal, y_cal, X_te, y_te, ALPHA)
+    X_pool, y_pool = pd.concat([X_cal, X_te]), np.concatenate([y_cal, y_te])
+    stress = an.guarantee_stress_test(model, X_pool, y_pool, ALPHA)
+    results["guarantee_stress_test"] = {k: v for k, v in stress.items() if not k.startswith("_")}
+    results["scan_budget"] = an.scan_budget_table(p_cal, f4_cal, p_te, f4, y_te)
+    results["composite_vs_decomposed"] = an.composite_vs_decomposed(
+        candidates[chosen], X_tr, y_tr, X_te, y_te, FEATURES, cal_method)
+    results["sensitivity_all_adults"] = all_adults_check(candidates[chosen], cal_method)
 
     print(json.dumps(results, indent=2))
     json.dump(results, open(os.path.join(OUT, "results.json"), "w"), indent=2)
@@ -295,6 +354,38 @@ def main():
     sv = shap_values_for(raw, X_tr, X_te)
     shap.summary_plot(sv, X_te, show=False, color_bar=True)
     plt.tight_layout(); plt.savefig(os.path.join(OUT, "shap_summary.png"), dpi=200); plt.close()
+    results["shap_alignment"] = an.shap_alignment(sv, FEATURES)
+
+    # ---------- External validation on a different NHANES cycle (if downloaded) ----------
+    ext = ld.load_external() if ld.DATA_SOURCE == "nhanes" else None
+    results["external_validation"] = (an.external_validation(model, q_pos, q_neg, ext, FEATURES)
+                                      if ext is not None else None)
+    print("External validation:", results["external_validation"] or "files not in data/nhanes_2021/ yet")
+    json.dump(results, open(os.path.join(OUT, "results.json"), "w"), indent=2)
+
+    # ---------- RQ1 chart: miss rate over many new splits ----------
+    plt.figure(figsize=(6.5, 4.2))
+    plt.hist(stress["_misses"], bins=25, color="0.75", edgecolor="black")
+    plt.axvline(100 * ALPHA, color="black", ls="--", label=f"Allowed: {100 * ALPHA:.0f}%")
+    plt.axvline(stress["mean_miss_rate_pct"], color="black", ls="-",
+                label=f"Average: {stress['mean_miss_rate_pct']:.1f}%")
+    plt.xlabel("% of sick patients cleared (missed) on a new split")
+    plt.ylabel(f"Number of splits (of {stress['repeats']})")
+    plt.title("Safety bound on 500 new calibration/test splits"); plt.legend()
+    plt.tight_layout(); plt.savefig(os.path.join(OUT, "guarantee_stress_test.png"), dpi=200); plt.close()
+
+    # ---------- Objective 4 chart: limited scans ----------
+    rows = results["scan_budget"]
+    xs = np.arange(len(rows)); w = 0.38
+    plt.figure(figsize=(6.5, 4.2))
+    plt.bar(xs - w / 2, [x["fib4"]["miss_rate_pct"] for x in rows], w, color="white",
+            edgecolor="black", hatch="//", label="FIB-4")
+    plt.bar(xs + w / 2, [x["model"]["miss_rate_pct"] for x in rows], w, color="0.55",
+            edgecolor="black", label="Model")
+    plt.xticks(xs, [f"{x['budget_pct']}%" for x in rows])
+    plt.xlabel("Share of patients that can be scanned"); plt.ylabel("% of sick patients missed")
+    plt.title("When FibroScans are limited"); plt.legend()
+    plt.tight_layout(); plt.savefig(os.path.join(OUT, "scan_budget.png"), dpi=200); plt.close()
 
     # ---------- Step 7: one example patient card ----------
     # Illustrative example: a patient FIB-4 calls "unsure" (1.30-2.67) whom the
@@ -321,7 +412,8 @@ def main():
 
     # save everything the demo app needs
     joblib.dump({"model": model, "raw": raw, "q_pos": q_pos, "q_neg": q_neg,
-                 "features": FEATURES, "chosen_model": chosen,
+                 "features": FEATURES, "chosen_model": chosen, "calibration_method": cal_method,
+                 "cohort": ld.COHORT,
                  "background": X_tr.sample(min(300, len(X_tr)), random_state=SEED), "data_source": ld.DATA_SOURCE},
                 os.path.join(OUT, "model.joblib"))
     print("\nSaved results, charts and model in outputs/")

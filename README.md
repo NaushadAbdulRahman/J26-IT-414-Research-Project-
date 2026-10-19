@@ -55,18 +55,22 @@ evaluated head-to-head against FIB-4 on the same patients.
 2. **Preprocessing**: missing-value handling and a locked train / calibration / test split.
 3. **Model selection**: logistic regression, random forest and gradient boosting (XGBoost) compared
    by 5-fold cross-validation; the best is kept, preferring the simpler model when scores are tied.
-4. **Calibration**: isotonic calibration so predicted risks match observed rates.
+4. **Calibration**: none, sigmoid or isotonic, chosen by cross-validated Brier score on the training data.
 5. **Decision layer**: class-conditional conformal prediction turns risk into SCAN / NO SCAN / UNSURE,
    with the allowed miss rate set in advance.
 6. **Explanation**: SHAP values give per-patient reasons.
 7. **Output**: a demo screening app.
-8. **Benchmark**: FIB-4 on the same test patients: miss rate, scans needed, AUROC, Brier score,
-   calibration curve and decision-curve analysis.
+8. **Benchmark**: FIB-4 and the uncalibrated model on the same test patients: miss rate, scans needed,
+   AUROC with bootstrap 95% CIs, calibration, decision-curve analysis, limited-scan budgets, and a
+   500-split stress test of the safety bound.
 
-**Data.** Developed on public NHANES 2017-March 2020 data (vibration-controlled transient
-elastography); to be recalibrated and validated on the local cohort.
+**Data.** Public NHANES 2017-March 2020 data: 2,984 adults with fatty liver (CAP >= 275 dB/m plus a
+metabolic risk factor) and a reliable FibroScan; 520 with significant fibrosis (>= 8 kPa). To be
+recalibrated and validated on local patients; an external check on NHANES 2021-2023 is ready to run.
 
-**Status.** [Update before PP1: e.g. "Pipeline complete and running on NHANES; local validation pending."]
+**Status (PP1).** All six proposal objectives implemented and evaluated on NHANES. On 597 unseen test
+patients, the tool missed 2.9% of sick patients (allowed 10%) while FIB-4 missed 70%; AUROC 0.77 vs 0.51.
+Includes input validation, a five-screen app, and 21 automated tests. Pending: local-cohort validation.
 
 **Run it.**
 
@@ -74,6 +78,7 @@ elastography); to be recalibrated and validated on the local cohort.
 cd component-1-fibrosis-screening
 pip install -r requirements.txt
 python src/run_all.py        # train, evaluate, save results and charts to outputs/
+python -m pytest -q          # automated checks
 streamlit run src/app.py     # open the demo screening tool
 ```
 

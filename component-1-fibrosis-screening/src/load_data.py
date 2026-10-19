@@ -20,8 +20,10 @@ import os
 import numpy as np
 import pandas as pd
 
-DATA_SOURCE = "nhanes"          # <-- change to "nhanes" or "local"
+DATA_SOURCE = "nhanes"             # "synthetic", "nhanes" or "local"
+COHORT = "masld"                   # "masld" (fatty liver, as in the proposal) or "all" adults
 STIFFNESS_CUTOFF_KPA = 8.0         # FibroScan stiffness treated as >= F2
+CAP_CUTOFF = 275                   # CAP (dB/m) treated as fatty liver
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(HERE, "..", "data")
@@ -59,31 +61,53 @@ def _synthetic(n=3000, seed=42):
                              label=label)).round(2)
 
 
-def _nhanes():
+def _nhanes(folder="nhanes", suffix_or_prefix=("P_", "")):
     """
-    NHANES 2017-March 2020. Download these .XPT files from the CDC NHANES
-    website and put them in data/nhanes/ :
+    NHANES liver elastography survey (public US data, CDC).
+
+    Main data, 2017-March 2020: put these files in data/nhanes/
         P_DEMO  P_BMX  P_BIOPRO  P_CBC  P_GHB  P_DIQ  P_LUX
-    NOTE: written from the NHANES documentation but NOT yet run on the real
-    files. If a column name is reported missing, check that file's codebook.
+    Second, separate data for external validation, August 2021-August 2023:
+    put these in data/nhanes_2021/
+        DEMO_L  BMX_L  BIOPRO_L  CBC_L  GHB_L  DIQ_L  LUX_L
+
+    Who is kept (COHORT = "masld", the population in the proposal):
+      * adults (18+) with a complete FibroScan exam
+      * reliable stiffness reading: IQR/median <= 30% (standard quality rule)
+      * fatty liver: CAP >= 275 dB/m
+      * at least one cardiometabolic risk factor (BMI >= 25, large waist,
+        HbA1c >= 5.7% or diabetes, triglycerides >= 150 mg/dL)
+    MASLD is approximated: NHANES alcohol and viral hepatitis data are not used here.
+    COHORT = "all" keeps every adult with a reliable scan (sensitivity analysis).
     """
-    d = os.path.join(DATA_DIR, "nhanes")
+    d = os.path.join(DATA_DIR, folder)
+    if not os.path.isdir(d):
+        raise FileNotFoundError(f"Folder not found: {d}")
     files = {f.upper(): f for f in os.listdir(d)}           # accepts .xpt or .XPT
+    pre, suf = suffix_or_prefix
 
     def read(name):
-        if name + ".XPT" not in files:
-            raise FileNotFoundError(f"{name}.xpt not found in {d}")
-        return pd.read_sas(os.path.join(d, files[name + ".XPT"]), format="xport")
-    df = read("P_DEMO")[["SEQN", "RIDAGEYR", "RIAGENDR"]]
-    for name, cols in [("P_BMX", ["BMXBMI", "BMXWAIST"]),
-                       ("P_BIOPRO", ["LBXSASSI", "LBXSATSI", "LBXSGTSI", "LBXSAL", "LBXSTR"]),
-                       ("P_CBC", ["LBXPLTSI"]),
-                       ("P_GHB", ["LBXGH"]),
-                       ("P_DIQ", ["DIQ010"]),
-                       ("P_LUX", ["LUAXSTAT", "LUXSMED"])]:
-        df = df.merge(read(name)[["SEQN"] + cols], on="SEQN", how="inner")
+        key = f"{pre}{name}{suf}.XPT"
+        if key not in files:
+            raise FileNotFoundError(f"{pre}{name}{suf}.xpt not found in {d}")
+        return pd.read_sas(os.path.join(d, files[key]), format="xport")
+    df = read("DEMO")[["SEQN", "RIDAGEYR", "RIAGENDR"]]
+    for name, cols in [("BMX", ["BMXBMI", "BMXWAIST"]),
+                       ("BIOPRO", ["LBXSASSI", "LBXSATSI", "LBXSGTSI", "LBXSAL", "LBXSTR"]),
+                       ("CBC", ["LBXPLTSI"]),
+                       ("GHB", ["LBXGH"]),
+                       ("DIQ", ["DIQ010"]),
+                       ("LUX", ["LUAXSTAT", "LUXSMED", "LUXSIQRM", "LUXCAPM"])]:
+        how = "inner" if name in ("BIOPRO", "CBC", "LUX") else "left"   # optional results may be missing
+        df = df.merge(read(name)[["SEQN"] + cols], on="SEQN", how=how)
 
-    df = df[(df.RIDAGEYR >= 18) & (df.LUAXSTAT == 1)]        # adults, complete scan
+    keep = (df.RIDAGEYR >= 18) & (df.LUAXSTAT == 1) & (df.LUXSIQRM <= 30)
+    if COHORT == "masld":
+        male = df.RIAGENDR == 1
+        risk = ((df.BMXBMI >= 25) | ((df.BMXWAIST >= 94) & male) | ((df.BMXWAIST >= 80) & ~male)
+                | (df.LBXGH >= 5.7) | (df.DIQ010 == 1) | (df.LBXSTR >= 150))
+        keep &= (df.LUXCAPM >= CAP_CUTOFF) & risk
+    df = df[keep]
     out = pd.DataFrame({
         "age": df.RIDAGEYR, "sex": (df.RIAGENDR == 1).astype(int),
         "bmi": df.BMXBMI, "waist": df.BMXWAIST,
@@ -97,11 +121,19 @@ def _nhanes():
     return out.dropna(subset=["age", "ast", "alt", "platelets"]).reset_index(drop=True)
 
 
+def load_external():
+    """The second NHANES dataset (2021-2023), or None if its files are not there yet."""
+    try:
+        return _nhanes("nhanes_2021", ("", "_L"))[FEATURES + ["label"]]
+    except FileNotFoundError:
+        return None
+
+
 def load_data():
     if DATA_SOURCE == "synthetic":
         df = _synthetic()
     elif DATA_SOURCE == "nhanes":
-        df = _nhanes()
+        df = _nhanes("nhanes", ("P_", ""))
     elif DATA_SOURCE == "local":
         df = pd.read_csv(os.path.join(DATA_DIR, "local.csv"))
     else:
