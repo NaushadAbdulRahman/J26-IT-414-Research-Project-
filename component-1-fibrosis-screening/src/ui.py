@@ -40,8 +40,8 @@ FONTFACES
   font-family: 'Atkinson Hyperlegible', system-ui, -apple-system, sans-serif;
 }}
 .stApp {{ color: {INK}; }}
-[data-testid="stToolbar"], [data-testid="stDecoration"], #MainMenu, footer {{ display: none !important; }}
-header[data-testid="stHeader"] {{ background: transparent; height: 0; }}
+[data-testid="stAppDeployButton"], [data-testid="stMainMenu"], [data-testid="stDecoration"], #MainMenu, footer {{ display: none !important; }}
+header[data-testid="stHeader"] {{ background: transparent; }}
 .block-container {{ padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1240px; }}
 
 /* sidebar: a quiet navigation column */

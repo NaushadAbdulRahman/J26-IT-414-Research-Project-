@@ -26,7 +26,7 @@ import shap
 import ui
 from screening import (Screener, NAMES, OUTPUTS, fib4, fib4_zone, shown_value, parse_upload)
 
-st.set_page_config(page_title="Fibrosis referral", layout="wide")
+st.set_page_config(page_title="Fibrosis referral", layout="wide", initial_sidebar_state="expanded")
 ui.style()
 
 
