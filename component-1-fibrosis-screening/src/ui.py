@@ -7,6 +7,7 @@ Everything else is ink on clinical white.
 """
 import os
 import base64
+import numpy as np
 import streamlit as st
 
 FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")
@@ -29,11 +30,15 @@ ZONE_TINT = {"NO SCAN": "#E3EFE8", "UNSURE": "#F6ECD9", "SCAN": "#F6E1E7"}
 # The app follows Streamlit's light or dark theme. Every colour on screen is a CSS variable,
 # set from one of these two palettes, so the same green/amber/crimson meaning holds in both.
 PALETTE = {
-    "light": {"ink": INK, "muted": MUTED, "faint": "#8A979D", "rule": RULE, "paper": PAPER, "on-ink": "#FFFFFF",
+    "light": {"ink": INK, "muted": MUTED, "faint": "#8A979D", "rule": RULE, "paper": "#EEF0EB", "on-ink": "#FFFFFF",
+              "bg": "#F7F7F3", "field": "#FFFFFF", "field-line": "#D9DDD6",
+              "accent": "#1E6E64", "accent-hover": "#175A52", "on-accent": "#FFFFFF", "accent-soft": "#E3EFEC",
               "z-noscan": ZONE["NO SCAN"], "z-unsure": ZONE["UNSURE"], "z-scan": ZONE["SCAN"],
               "t-noscan": ZONE_TINT["NO SCAN"], "t-unsure": ZONE_TINT["UNSURE"], "t-scan": ZONE_TINT["SCAN"]},
     "dark":  {"ink": "#E7ECEA", "muted": "#A3AEB4", "faint": "#6F7B81", "rule": "#2F3940", "paper": "#171D23",
               "on-ink": "#0E1117",
+              "bg": "#0E1117", "field": "#1B2129", "field-line": "#2F3940",
+              "accent": "#3FA592", "accent-hover": "#56B8A5", "on-accent": "#08201C", "accent-soft": "#13302B",
               "z-noscan": "#6CC497", "z-unsure": "#E5A93B", "z-scan": "#F07C9A",
               "t-noscan": "#152A20", "t-unsure": "#2F2513", "t-scan": "#35171F"},
 }
@@ -72,8 +77,8 @@ FONTFACES
 .stApp [data-testid="stMarkdownContainer"] *, [data-baseweb="select"] div {{
   font-family: 'Atkinson Hyperlegible', system-ui, -apple-system, sans-serif;
 }}
-.stApp {{ color: var(--c1-ink); }}
-[data-testid="stAppDeployButton"], [data-testid="stMainMenu"], [data-testid="stDecoration"], #MainMenu, footer {{ display: none !important; }}
+.stApp {{ color: var(--c1-ink); background: var(--c1-bg); }}
+[data-testid="stAppDeployButton"], [data-testid="stDecoration"], footer {{ display: none !important; }}
 header[data-testid="stHeader"] {{ background: transparent; }}
 .block-container {{ padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1240px; }}
 
@@ -84,7 +89,10 @@ header[data-testid="stHeader"] {{ background: transparent; }}
 [data-testid="InputInstructions"], .stApp [class*="InputInstructions"] {{ display: none !important; }}
 /* every field the same: one height, one inset, one text size, so values line up in a column */
 .stApp [data-testid="stNumberInputContainer"], .stApp [data-testid="stTextInputRootElement"],
-.stApp .stSelectbox .react-aria-ComboBox > div {{ height: 44px; min-height: 44px; border-radius: 6px; }}
+.stApp .stSelectbox .react-aria-ComboBox > div {{ height: 44px; min-height: 44px; border-radius: 6px;
+  background: var(--c1-field); box-shadow: inset 0 0 0 1px var(--c1-field-line); }}
+.stApp [data-testid="stNumberInputContainer"]:focus-within, .stApp [data-testid="stTextInputRootElement"]:focus-within,
+.stApp .stSelectbox .react-aria-ComboBox > div:focus-within {{ box-shadow: inset 0 0 0 2px var(--c1-accent); }}
 .stApp [data-testid="stNumberInputField"], .stApp [data-testid="stTextInputField"],
 .stApp .stSelectbox input {{ height: 44px; padding: 0 12px !important; font-size: 16px !important;
   line-height: 44px; font-variant-numeric: tabular-nums; }}
@@ -94,12 +102,23 @@ header[data-testid="stHeader"] {{ background: transparent; }}
 .stButton button, .stFormSubmitButton button, .stDownloadButton button {{
   border-radius: 6px; font-weight: 700; min-height: 46px; }}
 .stButton button p, .stFormSubmitButton button p, .stDownloadButton button p {{ font-size: 16px; font-weight: 700; }}
-/* primary button in ink, also when the shared app's theme is used */
+/* buttons in the accent green (a different green from the "No scan" result colour) */
 .stApp button[kind="primary"], .stApp button[kind="primaryFormSubmit"] {{
-  background: var(--c1-ink); border-color: var(--c1-ink); color: var(--c1-on-ink); }}
+  background: var(--c1-accent); border-color: var(--c1-accent); color: var(--c1-on-accent); }}
+.stApp button[kind="primary"]:hover, .stApp button[kind="primaryFormSubmit"]:hover {{
+  background: var(--c1-accent-hover); border-color: var(--c1-accent-hover); color: var(--c1-on-accent); }}
+.stApp button[kind="primary"] p, .stApp button[kind="primaryFormSubmit"] p {{ color: var(--c1-on-accent); }}
+.stApp button[kind="secondary"], .stApp [data-testid="stDownloadButton"] button,
+.stApp [data-testid="stBaseButton-secondary"] {{
+  background: var(--c1-field); border: 1px solid var(--c1-accent); color: var(--c1-accent); }}
+.stApp button[kind="secondary"] p, .stApp [data-testid="stDownloadButton"] button p {{ color: var(--c1-accent); }}
+.stApp button[kind="secondary"]:hover, .stApp [data-testid="stDownloadButton"] button:hover {{
+  background: var(--c1-accent-soft); border-color: var(--c1-accent); }}
 /* tabs (when shown inside the shared app) */
-.stApp [data-baseweb="tab-highlight"], .stApp .react-aria-SelectionIndicator {{ background-color: var(--c1-ink) !important; }}
-.stApp [role="tab"][aria-selected="true"] p {{ color: var(--c1-ink) !important; font-weight: 700; }}
+.stApp [data-baseweb="tab-highlight"], .stApp .react-aria-SelectionIndicator {{ background-color: var(--c1-accent) !important; }}
+.stApp [role="tab"][aria-selected="true"] p {{ color: var(--c1-accent) !important; font-weight: 700; }}
+/* expanders sit on the page like cards */
+.stApp [data-testid="stExpander"] details {{ background: var(--c1-field); border-color: var(--c1-field-line); }}
 .stApp [role="tab"] p {{ font-size: 16px !important; }}
 
 /* our own blocks */
@@ -160,6 +179,7 @@ SIDEBAR_CSS = f"""
 <style>
 /* sidebar: a quiet navigation column */
 [data-testid="stSidebar"] {{ background: var(--c1-paper); border-right: 1px solid var(--c1-rule); }}
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) p {{ color: var(--c1-accent); font-weight: 700; }}
 [data-testid="stSidebar"] [role="radiogroup"] label {{ padding: 6px 0; }}
 [data-testid="stSidebar"] [role="radiogroup"] p {{ font-size: 16px; }}
 
@@ -271,6 +291,44 @@ def stats(rows):
         f'<span><small>This tool</small><b>{t}</b></span></div><p class="n">{n}</p></div>'
         for m, f, t, n in rows)
     html(f'<div class="fx-stats">{body}</div>')
+
+
+def waterfall(sv, base, labels, top=12):
+    """SHAP waterfall drawn in the app's own colours (follows light/dark theme).
+    Bars are walked from the biggest effect to the smallest: each starts where the
+    previous one ended, from the average patient's score to this patient's score."""
+    import matplotlib.pyplot as plt
+    pal = PALETTE[theme()]
+    seq = list(np.argsort(-np.abs(sv))[:top])           # biggest effect first (drawn at the top)
+    ends = np.cumsum([base] + [sv[j] for j in seq])     # running score after each bar
+    span = (ends.max() - ends.min()) or 1.0
+    ys = np.arange(len(seq))[::-1]
+
+    fig, ax = plt.subplots(figsize=(7.2, 0.42 * len(seq) + 1.2), dpi=200)
+    fig.patch.set_alpha(0)
+    ax.set_facecolor("none")
+    for y, j, left in zip(ys, seq, ends[:-1]):
+        v = sv[j]
+        c = pal["z-scan"] if v > 0 else pal["z-noscan"]
+        ax.barh(y, v, left=left, height=0.62, color=c, edgecolor="none")
+        ax.text(left + v + (0.015 if v >= 0 else -0.015) * span, y, f"{v:+.2f}",
+                va="center", ha="left" if v >= 0 else "right", fontsize=9.5, color=c)
+    for x0, name in [(ends[0], "average patient"), (ends[-1], "this patient")]:
+        ax.axvline(x0, color=pal["muted"], lw=0.8, ls=(0, (3, 3)))
+        ax.text(x0, len(seq) - 0.35, name, ha="center", va="bottom", fontsize=8, color=pal["muted"])
+
+    ax.set_yticks(ys)
+    ax.set_yticklabels([labels[j] for j in seq], fontsize=10, color=pal["ink"])
+    for side in ("top", "right", "left"):
+        ax.spines[side].set_visible(False)
+    ax.spines["bottom"].set_color(pal["rule"])
+    ax.tick_params(axis="x", colors=pal["muted"], labelsize=8)
+    ax.tick_params(axis="y", length=0)
+    ax.set_xlabel("Model score (log-odds)", fontsize=8.5, color=pal["muted"])
+    ax.set_xlim(ends.min() - 0.2 * span, ends.max() + 0.2 * span)
+    ax.set_ylim(-0.7, len(seq) + 0.25)
+    fig.tight_layout()
+    return fig
 
 
 def empty(text):

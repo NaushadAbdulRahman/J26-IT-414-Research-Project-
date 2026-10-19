@@ -191,23 +191,6 @@ def page_screen():
         st.caption("Each row is a SHAP value: how far that result moved this patient's risk "
                    "compared with an average patient.")
 
-        with st.expander("SHAP waterfall plot and all 12 values"):
-            plt.figure()                     # fresh canvas for SHAP to draw on
-            exp = shap.Explanation(values=sv, base_values=S.shap_base, data=x.iloc[0].values,
-                                   feature_names=[NAMES[f] for f in FEATURES])
-            shap.plots.waterfall(exp, max_display=12, show=False)
-            st.pyplot(plt.gcf())
-            plt.close("all")
-            st.caption("Starts from the average patient, E[f(x)], and adds each result's SHAP "
-                       "value to reach this patient's score, f(x). Scale: the model's log-odds "
-                       "before calibration; the risk above is after calibration.")
-            st.dataframe(pd.DataFrame({
-                "Result": [NAMES[f] for f in FEATURES],
-                "Value": [shown_value(f, x.iloc[0][f]) for f in FEATURES],
-                "SHAP value": np.round(sv, 3),
-                "Effect": ["raises risk" if v > 0 else "lowers risk" for v in sv],
-            }).sort_values("SHAP value", key=abs, ascending=False), hide_index=True, width="stretch")
-
         st.download_button("Download report", report_html(pid, x, label, p, f4, top, sv),
                            file_name=f"screening_report_{pid or 'patient'}.html",
                            mime="text/html", on_click="ignore")
@@ -215,6 +198,25 @@ def page_screen():
             "Time": dt.datetime.now().strftime("%H:%M"), "Patient ID": pid or "-",
             "Decision": ui.HEADLINE[label], "Risk %": round(100 * p, 1), "FIB-4": round(f4, 2),
             "FIB-4 alone": str(fib4_zone(np.array([f4]))[0]).capitalize()})
+
+    # ---------- full-width section under the form: the complete SHAP explanation ----------
+    with st.expander("Full SHAP explanation: waterfall and all 12 values", expanded=False):
+        chart, table = st.columns([1.25, 1], gap="large")
+        with chart:
+            fig = ui.waterfall(sv, S.shap_base, [f"{NAMES[f]}  {shown_value(f, x.iloc[0][f])}" for f in FEATURES])
+            st.pyplot(fig, width="stretch")
+            plt.close(fig)
+            st.caption("Starts from the average patient and adds each result's SHAP value to reach this "
+                       "patient's score. Scale: the model's log-odds before calibration; the risk above "
+                       "is after calibration.")
+        with table:
+            st.dataframe(pd.DataFrame({
+                "Result": [NAMES[f] for f in FEATURES],
+                "Value": [shown_value(f, x.iloc[0][f]) for f in FEATURES],
+                "SHAP value": np.round(sv, 3),
+                "Effect": ["raises risk" if v > 0 else "lowers risk" for v in sv],
+            }).sort_values("SHAP value", key=abs, ascending=False), hide_index=True, width="stretch",
+                height=35 * 12 + 38)
 
 
 def page_batch():
