@@ -53,7 +53,7 @@ header[data-testid="stHeader"] {{ background: transparent; }}
 [data-testid="stForm"] {{ border: 0; padding: 0; background: transparent; }}
 [data-testid="stNumberInputStepDown"], [data-testid="stNumberInputStepUp"] {{ display: none; }}
 /* no "Press Enter to submit form" hint drawn over the value */
-[data-testid="InputInstructions"] {{ display: none !important; }}
+[data-testid="InputInstructions"], .stApp [class*="InputInstructions"] {{ display: none !important; }}
 /* every field the same: one height, one inset, one text size, so values line up in a column */
 .stApp [data-testid="stNumberInputContainer"], .stApp [data-testid="stTextInputRootElement"],
 .stApp .stSelectbox .react-aria-ComboBox > div {{ height: 44px; min-height: 44px; border-radius: 6px; }}
@@ -109,6 +109,13 @@ header[data-testid="stHeader"] {{ background: transparent; }}
 .fx-stack div {{ height: 26px; }}
 .fx-key {{ font-size: 14px; color: {MUTED}; margin-bottom: 16px; }}
 .fx-key b {{ color: {INK}; }}
+[data-testid="stElementContainer"]:has(.fx-style) {{ display: none; }}
+.stApp p.fx-err {{ color: {ZONE["SCAN"]}; font-size: 13px; line-height: 1.35; margin: -6px 0 4px; }}
+.fx-problems {{ border-left: 4px solid var(--z); background: var(--t); padding: 14px 18px;
+  border-radius: 0 8px 8px 0; margin: 0 0 18px; }}
+.fx-problems b.h {{ display: block; color: var(--z); font-size: 16px; margin-bottom: 6px; }}
+.fx-problems ul {{ margin: 0; padding-left: 18px; }}
+.fx-problems li {{ font-size: 14px; line-height: 1.45; margin: 2px 0; color: {INK}; }}
 .fx-prose {{ max-width: 68ch; font-size: 17px; line-height: 1.6; }}
 </style>
 """
@@ -188,6 +195,23 @@ def stack(who, counts, total):
          f'<div class="fx-stack">{parts}</div>'
          f'<p class="fx-key"><b>{counts["NO SCAN"]}</b> no scan, <b>{counts["UNSURE"]}</b> uncertain, '
          f'<b>{counts["SCAN"]}</b> refer. Sent for FibroScan: <b>{sent} of {total}</b>.</p>')
+
+
+def problems(heading, items, zone):
+    """A short list of things to fix (zone SCAN, crimson) or to double-check (zone UNSURE, amber)."""
+    lis = "".join(f"<li>{i}</li>" for i in items)
+    html(f'<div class="fx-problems" style="--z:{ZONE[zone]};--t:{ZONE_TINT[zone]}">'
+         f'<b class="h">{heading}</b><ul>{lis}</ul></div>')
+
+
+def mark_errors(keys):
+    """Outline the boxes that have an error in crimson."""
+    if keys:
+        sel = ", ".join(f".st-key-{k} [data-testid='stNumberInputContainer'], "
+                        f".st-key-{k} [data-testid='stTextInputRootElement'], "
+                        f".st-key-{k} .react-aria-ComboBox > div" for k in keys)
+        html(f"<div class='fx-style'></div><style>{sel} {{ box-shadow: inset 0 0 0 1.5px {ZONE['SCAN']}; "
+             f"background: {ZONE_TINT['SCAN']} !important; }}</style>")
 
 
 def empty(text):

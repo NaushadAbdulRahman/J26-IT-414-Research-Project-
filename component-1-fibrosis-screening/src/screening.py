@@ -46,6 +46,8 @@ def fib4_zone(score):
 
 def shown_value(feature, value):
     """A patient's value written for people (Male/Female, Yes/No, units)."""
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return "not entered"
     if feature == "sex":
         return "Male" if value == 1 else "Female"
     if feature == "diabetes":

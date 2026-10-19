@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 import streamlit as st
 import shap
 import ui
+import validate
 from screening import (Screener, NAMES, OUTPUTS, fib4, fib4_zone, shown_value, parse_upload)
 
 S = None          # the trained screener, set by run()
@@ -48,9 +49,30 @@ DEFAULT = dict(age=55, sex="Male", bmi=29.0, waist=98.0, diabetes="No", ast=38.0
                ggt=45.0, platelets=210.0, albumin=4.2, hba1c=6.0, triglycerides=150.0)
 
 def load_example():
+    """Fill the form with an example patient, or empty it for 'Enter values myself'."""
     ex = EXAMPLES[st.session_state[K("example")]]
-    for k, val in (ex or DEFAULT).items():
-        st.session_state[K(k)] = val
+    for k in DEFAULT:
+        st.session_state[K(k)] = ex[k] if ex else None
+    st.session_state[K("pid")] = ""
+    st.session_state[K("check")] = None          # forget the last check
+
+
+def check_form():
+    """Runs when 'Screen patient' is pressed, before the page redraws, so errors can sit under each box."""
+    s = st.session_state
+    st.session_state[K("check")] = validate.check({k: s[K(k)] for k in DEFAULT}, s.get(K("pid"), ""))
+
+
+def field_error(col, field):
+    """Show this box's error underneath it (and outline the box, see ui.mark_errors)."""
+    chk = st.session_state.get(K("check"))
+    if chk and field in chk[0]:
+        msg = chk[0][field]
+        if msg.startswith("Required"):
+            msg = "Required"                              # the full reason is in the list on the right
+        elif "looks like" in msg:
+            msg = msg.split(":")[0] + "."                 # e.g. "42 looks like g/L. This box takes g/dL."
+        col.markdown(f'<p class="fx-err">{msg}</p>', unsafe_allow_html=True)
 
 
 def report_html(pid, x, label, p, f4, top, sv):
@@ -80,83 +102,117 @@ def page_screen():
     left, right = st.columns([1.05, 0.95], gap="large")
     with left:
         st.selectbox("Load an example patient", list(EXAMPLES), key=K("example"), on_change=load_example)
-        with st.form(K("patient")):
-            st.text_input("Patient ID (optional)", key=K("pid"), placeholder="Clinic number")
+        # enter_to_submit=False: no "Press Enter to submit form" hint inside the boxes
+        chk = st.session_state.get(K("check"))
+        ui.mark_errors([K(f) for f in chk[0]] if chk else [])
+
+        def number(col, field, label, decimals):
+            """A number box with no hidden limits: every value is checked in validate.py instead,
+            so a typing slip is reported, never silently changed."""
+            need = "Required" if field in validate.REQUIRED else "Optional"
+            col.number_input(label, value=None, step=1 if decimals == 0 and field == "age" else 10.0 ** -decimals,
+                             format="%d" if field == "age" else f"%.{decimals}f",
+                             placeholder=need, key=K(field))
+            field_error(col, field)
+
+        def choice(col, field, label, options):
+            col.selectbox(label, options, index=None, placeholder="Required", key=K(field))
+            field_error(col, field)
+
+        with st.form(K("patient"), enter_to_submit=False, border=False):
+            st.text_input("Patient ID (optional)", key=K("pid"), max_chars=20,
+                          placeholder="Clinic number, not a name")
+            field_error(st, "pid")
             ui.group("Patient")
-            # one st.columns call per row, so every row lines up and none is left half-empty
+            # one st.columns call per row, so every row lines up
             a, b, c = st.columns(3)
-            a.number_input("Age, years", 18, 90, key=K("age"))
-            b.selectbox("Sex", ["Male", "Female"], key=K("sex"))
-            c.selectbox("Diabetes", ["No", "Yes"], key=K("diabetes"))
+            number(a, "age", "Age, years", 0)
+            choice(b, "sex", "Sex", ["Male", "Female"])
+            choice(c, "diabetes", "Diabetes", ["No", "Yes"])
             a, b, _ = st.columns(3)
-            a.number_input("BMI, kg/m²", 15.0, 70.0, step=0.1, format="%.1f", key=K("bmi"))
-            b.number_input("Waist, cm", 50.0, 180.0, step=0.1, format="%.1f", key=K("waist"))
+            number(a, "bmi", "BMI, kg/m²", 1)
+            number(b, "waist", "Waist, cm", 1)
             ui.group("Liver tests")
             a, b, _ = st.columns(3)
-            a.number_input("AST, U/L", 5.0, 1000.0, step=1.0, format="%.0f", key=K("ast"))
-            b.number_input("ALT, U/L", 5.0, 1000.0, step=1.0, format="%.0f", key=K("alt"))
+            number(a, "ast", "AST, U/L", 0)
+            number(b, "alt", "ALT, U/L", 0)
             a, b, _ = st.columns(3)
-            a.number_input("GGT, U/L", 5.0, 1500.0, step=1.0, format="%.0f", key=K("ggt"))
-            b.number_input("Albumin, g/dL", 1.5, 6.0, step=0.1, format="%.1f", key=K("albumin"))
+            number(a, "ggt", "GGT, U/L", 0)
+            number(b, "albumin", "Albumin, g/dL", 1)
             ui.group("Blood count and metabolic")
             a, b, c = st.columns(3)
-            a.number_input("Platelets, ×10⁹/L", 20.0, 800.0, step=1.0, format="%.0f", key=K("platelets"))
-            b.number_input("HbA1c, %", 3.5, 16.0, step=0.1, format="%.1f", key=K("hba1c"))
-            c.number_input("Triglycerides, mg/dL", 20.0, 2000.0, step=1.0, format="%.0f", key=K("triglycerides"))
-            st.write("")
-            submitted = st.form_submit_button("Screen patient", type="primary", width="stretch")
+            number(a, "platelets", "Platelets, ×10⁹/L", 0)
+            number(b, "hba1c", "HbA1c, %", 1)
+            number(c, "triglycerides", "Triglycerides, mg/dL", 0)
+            st.caption("Age, sex, diabetes, AST, ALT and platelets are required. "
+                       "The others can be left blank if not measured.")
+            submitted = st.form_submit_button("Screen patient", type="primary", width="stretch",
+                                              on_click=check_form)
 
     with right:
-        if not submitted:
+        chk = st.session_state.get(K("check"))
+        if not submitted or chk is None:
             ui.empty("The decision appears here.<br>Enter the patient's results and choose "
                      "<b>Screen patient</b>, or load one of the three example patients.")
-        else:
-            s = st.session_state
-            v = {k: s[K(k)] for k in DEFAULT}
-            v["sex"] = 1 if v["sex"] == "Male" else 0
-            v["diabetes"] = 1 if v["diabetes"] == "Yes" else 0
-            x = pd.DataFrame([v])[FEATURES].astype(float)
-            p = float(S.risk(x)[0])
-            label = S.decide([p])[0]
-            f4 = float(fib4(x).iloc[0])
-            pid = s.get(K("pid"), "").strip()
+            return
+        errors, warnings, filled = chk
+        if errors:
+            n = len(errors)
+            ui.problems(f"{n} {'box needs' if n == 1 else 'boxes need'} fixing before this patient can be screened",
+                        [f"<b>{validate.LABEL[f]}</b>: {m}" for f, m in errors.items()], "SCAN")
+            return
 
-            ui.decision(label, pid)
-            ui.risk(p)
-            ui.group("Where this patient falls")
-            ui.scales(f4, p, S.low, S.high)
+        s = st.session_state
+        v = {k: s[K(k)] for k in DEFAULT}
+        v["sex"] = 1 if v["sex"] == "Male" else 0
+        v["diabetes"] = 1 if v["diabetes"] == "Yes" else 0
+        x = pd.DataFrame([v])[FEATURES].astype(float)          # blanks become NaN; the model fills them in
+        p = float(S.risk(x)[0])
+        label = S.decide([p])[0]
+        f4 = float(fib4(x).iloc[0])
+        pid = s.get(K("pid"), "").strip()
 
-            ui.group("Why: SHAP explanation")
-            sv = S.reasons(x)[0]
-            top = list(np.argsort(-np.abs(sv))[:5])
-            ui.reasons([(NAMES[FEATURES[j]], shown_value(FEATURES[j], x.iloc[0, j]), sv[j]) for j in top])
-            st.caption("Each row is a SHAP value: how far that result moved this patient's risk "
-                       "compared with an average patient.")
+        if warnings:
+            ui.problems("Check these results", warnings, "UNSURE")
+        if filled:
+            st.caption(f"Not entered: {', '.join(filled)}. The model used a typical value for "
+                       "these, so the risk is less precise.")
+        ui.decision(label, pid)
+        ui.risk(p)
+        ui.group("Where this patient falls")
+        ui.scales(f4, p, S.low, S.high)
 
-            with st.expander("SHAP waterfall plot and all 12 values"):
-                plt.figure()                     # fresh canvas for SHAP to draw on
-                exp = shap.Explanation(values=sv, base_values=S.shap_base, data=x.iloc[0].values,
-                                       feature_names=[NAMES[f] for f in FEATURES])
-                shap.plots.waterfall(exp, max_display=12, show=False)
-                st.pyplot(plt.gcf())
-                plt.close("all")
-                st.caption("Starts from the average patient, E[f(x)], and adds each result's SHAP "
-                           "value to reach this patient's score, f(x). Scale: the model's log-odds "
-                           "before calibration; the risk above is after calibration.")
-                st.dataframe(pd.DataFrame({
-                    "Result": [NAMES[f] for f in FEATURES],
-                    "Value": [shown_value(f, x.iloc[0][f]) for f in FEATURES],
-                    "SHAP value": np.round(sv, 3),
-                    "Effect": ["raises risk" if v > 0 else "lowers risk" for v in sv],
-                }).sort_values("SHAP value", key=abs, ascending=False), hide_index=True, width="stretch")
+        ui.group("Why: SHAP explanation")
+        sv = S.reasons(x)[0]
+        top = list(np.argsort(-np.abs(sv))[:5])
+        ui.reasons([(NAMES[FEATURES[j]], shown_value(FEATURES[j], x.iloc[0, j]), sv[j]) for j in top])
+        st.caption("Each row is a SHAP value: how far that result moved this patient's risk "
+                   "compared with an average patient.")
 
-            st.download_button("Download report", report_html(pid, x, label, p, f4, top, sv),
-                               file_name=f"screening_report_{pid or 'patient'}.html",
-                               mime="text/html", on_click="ignore")
-            st.session_state[K("history")].append({
-                "Time": dt.datetime.now().strftime("%H:%M"), "Patient ID": pid or "-",
-                "Decision": ui.HEADLINE[label], "Risk %": round(100 * p, 1), "FIB-4": round(f4, 2),
-                "FIB-4 alone": str(fib4_zone(np.array([f4]))[0]).capitalize()})
+        with st.expander("SHAP waterfall plot and all 12 values"):
+            plt.figure()                     # fresh canvas for SHAP to draw on
+            exp = shap.Explanation(values=sv, base_values=S.shap_base, data=x.iloc[0].values,
+                                   feature_names=[NAMES[f] for f in FEATURES])
+            shap.plots.waterfall(exp, max_display=12, show=False)
+            st.pyplot(plt.gcf())
+            plt.close("all")
+            st.caption("Starts from the average patient, E[f(x)], and adds each result's SHAP "
+                       "value to reach this patient's score, f(x). Scale: the model's log-odds "
+                       "before calibration; the risk above is after calibration.")
+            st.dataframe(pd.DataFrame({
+                "Result": [NAMES[f] for f in FEATURES],
+                "Value": [shown_value(f, x.iloc[0][f]) for f in FEATURES],
+                "SHAP value": np.round(sv, 3),
+                "Effect": ["raises risk" if v > 0 else "lowers risk" for v in sv],
+            }).sort_values("SHAP value", key=abs, ascending=False), hide_index=True, width="stretch")
+
+        st.download_button("Download report", report_html(pid, x, label, p, f4, top, sv),
+                           file_name=f"screening_report_{pid or 'patient'}.html",
+                           mime="text/html", on_click="ignore")
+        st.session_state[K("history")].append({
+            "Time": dt.datetime.now().strftime("%H:%M"), "Patient ID": pid or "-",
+            "Decision": ui.HEADLINE[label], "Risk %": round(100 * p, 1), "FIB-4": round(f4, 2),
+            "FIB-4 alone": str(fib4_zone(np.array([f4]))[0]).capitalize()})
 
 
 def page_batch():
@@ -185,17 +241,26 @@ def page_batch():
         ui.empty("No patients yet. Download the template, fill in one row per patient, and upload it.")
     else:
         try:
-            data, incomplete = parse_upload(df, FEATURES)
+            data, _ = parse_upload(df, FEATURES)
         except ValueError as e:
             st.error(f"{e}. Download the template to see the expected columns.")
             return
-        ids = data["patient_id"] if "patient_id" in data.columns else pd.Series(range(1, len(data) + 1))
-        if incomplete.any():
-            st.warning(f"{int(incomplete.sum())} row(s) skipped: age, sex, diabetes, AST, ALT and "
-                       "platelets are required.")
-        ok = data[~incomplete]
+        ids = (data["patient_id"].astype(str) if "patient_id" in data.columns
+               else pd.Series([f"Row {i + 1}" for i in range(len(data))], index=data.index))
+        # same checks as the single-patient form; rows with an error are not screened
+        row_errors, row_warnings = validate.check_table(data)
+        bad = pd.Series([e != "" for e in row_errors], index=data.index)
+        if bad.any():
+            ui.problems(f"{int(bad.sum())} of {len(data)} rows not screened. Fix them in the spreadsheet "
+                        "and upload it again.",
+                        [f"<b>{ids[i]}</b> (row {n + 1}): {row_errors[n]}"
+                         for n, i in enumerate(data.index) if bad[i]][:20], "SCAN")
+        if bad.all():
+            return
+        ok = data[~bad]
         result = S.screen_table(ok)
-        result.insert(0, "Patient ID", ids[~incomplete].values)
+        result.insert(0, "Patient ID", ids[~bad].values)
+        result["Check"] = [w for w, b in zip(row_warnings, bad) if not b]
         order = {"SCAN": 0, "UNSURE": 1, "NO SCAN": 2}
         result = result.sort_values(by=["Decision", "Risk %"],
                                     key=lambda c: c.map(order) if c.name == "Decision" else -c)
@@ -326,8 +391,8 @@ def run(mode="sidebar"):
         return
     FEATURES = S.features
     st.session_state.setdefault(K("history"), [])
-    for k, val in DEFAULT.items():
-        st.session_state.setdefault(K(k), val)
+    for k in DEFAULT:                       # the form starts empty: nothing is pre-filled for a real patient
+        st.session_state.setdefault(K(k), None)
 
     if mode == "sidebar":
         with st.sidebar:
