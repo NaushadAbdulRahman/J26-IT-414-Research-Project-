@@ -8,3 +8,6 @@ data/interim/
 *.csv
 .DS_Store
 .env
+
+# Local Streamlit skill link
+.agents/skills/developing-with-streamlit
