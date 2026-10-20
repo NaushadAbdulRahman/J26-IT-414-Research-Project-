@@ -8,3 +8,13 @@ data/interim/
 *.csv
 .DS_Store
 .env
+
+# Patient data must never be committed - not even de-identified
+**/data/*
+!**/data/.gitkeep
+*.xpt
+# Generated files (re-created by running the code)
+**/outputs/*
+!**/outputs/.gitkeep
+# Python
+.venv/
