@@ -1,0 +1,11 @@
+Patients: 1249 | sick: 299 | FIB-4>=1.3 (referred): 498
+Sick patients FIB-4 would send home (MISSED): 162
+Scan budget used for every method: 498
+
+Method                        AUC all  AUC low-FIB4  Found/sick  Found/missed
+FIB-4 >= 1.3                    0.555         0.510     137/299         0/162
+Model trained on ALL            0.767         0.773     213/299       110/162
+Model trained REFERRED only     0.735         0.722     201/299        97/162
+
+AUC low-FIB4 = ranking quality inside the group FIB-4 sends home.
+Found/missed = of the sick patients FIB-4 misses, how many the method puts in its top-budget list.
