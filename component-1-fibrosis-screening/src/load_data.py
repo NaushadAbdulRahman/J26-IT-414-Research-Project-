@@ -116,9 +116,15 @@ def _nhanes(folder="nhanes", suffix_or_prefix=("P_", "")):
         "platelets": df.LBXPLTSI, "albumin": df.LBXSAL,
         "hba1c": df.LBXGH, "triglycerides": df.LBXSTR,
         "label": (df.LUXSMED >= STIFFNESS_CUTOFF_KPA).astype(int),
+        "SEQN": df.SEQN.astype(int),            # NHANES participant ID (for sharing results with the group)
     })
     # FIB-4 needs these four, so rows without them are dropped
     return out.dropna(subset=["age", "ast", "alt", "platelets"]).reset_index(drop=True)
+
+
+def load_nhanes_with_ids():
+    """The NHANES cohort with each participant's SEQN, for files shared with other components."""
+    return _nhanes("nhanes", ("P_", ""))
 
 
 def load_external():
