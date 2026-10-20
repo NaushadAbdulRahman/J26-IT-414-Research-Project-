@@ -2,12 +2,15 @@
 [Standard] binomial test + Benjamini-Hochberg (same as the FIB-4 audit).
 [Mine] the equal-scans setup and the bar for her model."""
 import pandas as pd
+import sys
 
 from group_tools import prepare, score_groups, referral_bar, worth_a_scan
 
 t = pd.read_csv("data/processed/c2_patient_table.csv")
-c = pd.read_csv("data/interim/c1_predictions_diabetic.csv")
+path = sys.argv[1] if len(sys.argv) > 1 else "data/interim/c1_predictions_diabetic.csv"
+c = pd.read_csv(path)
 m = c.merge(t, left_on="SEQN", right_on="id")
+print(f"C1 patients {len(c)}, matched in my table {len(m)}")
 
 # Give the model the same number of scans as FIB-4 flat 1.3 on these patients
 k = int((m["cleared_A"] == 0).sum())

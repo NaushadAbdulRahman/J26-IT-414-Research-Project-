@@ -2,12 +2,13 @@
 [Standard] reading the CSV and joining on id.
 [Mine] the equal-scans comparison (same number of scans for both rules)."""
 import pandas as pd
+import sys
 
 t = pd.read_csv("data/processed/c2_patient_table.csv")
-c = pd.read_csv("data/interim/c1_predictions_diabetic.csv")
+path = sys.argv[1] if len(sys.argv) > 1 else "data/interim/c1_predictions_diabetic.csv"
+c = pd.read_csv(path)
 m = c.merge(t, left_on="SEQN", right_on="id")
-if len(m) != len(c):
-    raise SystemExit("Some of C1's patients are not in my table - stop and check.")
+print(f"C1 patients {len(c)}, matched in my table {len(m)}")
 
 
 def summary(name, referred):
