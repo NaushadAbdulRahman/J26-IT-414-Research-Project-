@@ -17,8 +17,7 @@ BIN_RULES = {
     "platelets": ([0, 150, 300, 10000],  ["<150", "150-299", ">=300"]),
 }
 TRAITS = ["age", "sex", "bmi", "ast", "alt", "platelets"]
-CLEARED_COLS = {"flat": "cleared_A", "age_adjusted": "cleared_B"}
-
+CLEARED_COLS = {"flat": "cleared_A", "age_adjusted": "cleared_B", "model": "cleared_model"}
 
 def prepare(t, rule):
     """Add the bin columns and the 'cleared' / 'wrong' flags for one FIB-4 rule."""
