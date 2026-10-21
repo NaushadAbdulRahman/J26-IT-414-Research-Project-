@@ -3,3 +3,4 @@
 xgboost==3.4.1
 scikit-learn==1.9.1
 plotly==7.1.0
+certifi
