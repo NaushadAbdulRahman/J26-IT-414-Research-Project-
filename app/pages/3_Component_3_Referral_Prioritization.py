@@ -121,4 +121,3 @@ with st.expander('What is implemented and what comes next?'):
     st.markdown('**Next:** repeated trials and learning curves, equity-aware constraints, XGBoost-specific research extensions, and a statistical stopping rule. These are not implemented in this version.')
     st.write(f"Final test: {counts['test']:,} participants reserved; not evaluated by this comparison.")
     st.write('NHANES is a retrospective public survey sample, not a local referral queue. Results are unweighted demonstration metrics.')
-    st.write('Supervisor prototype feedback is pending; no clinical validation is claimed.')
