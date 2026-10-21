@@ -9,6 +9,8 @@ data/interim/
 .DS_Store
 .env
 
+# Local Streamlit skill link
+.agents/skills/developing-with-streamlit
 # Patient data must never be committed - not even de-identified
 **/data/*
 !**/data/.gitkeep
