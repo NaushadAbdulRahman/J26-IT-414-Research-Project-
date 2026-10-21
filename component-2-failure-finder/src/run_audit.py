@@ -12,23 +12,52 @@ import pandas as pd
 from group_tools import prepare, score_groups, referral_bar, worth_a_scan
 
 
+MIN_MATCHED = 200   # fewer patients than this cannot form reliable groups
+
+
+def check_predictions(c1):
+    """Return a reason string if the predictions file is unusable, else None."""
+    needed = {"SEQN", "probability"}
+    if not needed.issubset(c1.columns):
+        return f"file needs columns {sorted(needed)}"
+    if len(c1) == 0:
+        return "the file is empty"
+    prob = pd.to_numeric(c1["probability"], errors="coerce")
+    if prob.isna().any():
+        return "probability has blank or non-numeric values"
+    if ((prob < 0) | (prob > 1)).any():
+        return "probability must be between 0 and 1"
+    if prob.nunique() < 2:
+        return "every probability is the same, so no patient can be ranked"
+    if c1["SEQN"].duplicated().any():
+        return "SEQN has duplicates; each patient must appear once"
+    return None
+
+
 def run_audit(table, source="flat", c1=None):
     t = table.copy()
     if source == "model":
         if c1 is None:
             return {"status": "invalid", "reason": "no Component 1 predictions given"}
-        needed = {"SEQN", "probability"}
-        if not needed.issubset(c1.columns):
-            return {"status": "invalid", "reason": f"file needs columns {sorted(needed)}"}
+        problem = check_predictions(c1)
+        if problem:
+            return {"status": "invalid", "reason": problem}
+        c1 = c1.copy()
+        c1["probability"] = pd.to_numeric(c1["probability"])
         t = c1.merge(t, left_on="SEQN", right_on="id")
-        if len(t) == 0:
-            return {"status": "invalid", "reason": "no patients matched (check the SEQN numbers)"}
+        if len(t) < MIN_MATCHED:
+            return {"status": "invalid",
+                    "reason": f"only {len(t)} patients matched our table (need at least "
+                              f"{MIN_MATCHED}); check the SEQN numbers"}
         k = int((t["cleared_A"] == 0).sum())          # same number of scans as FIB-4 Rule A
         rank = t["probability"].rank(method="first", ascending=False)
         t["cleared_model"] = rank > k
     t = prepare(t, source)
     bar = referral_bar(t)
-    res = worth_a_scan(score_groups(t), bar)
+    scored = score_groups(t)
+    if len(scored) == 0:
+        return {"status": "invalid", "reason": "too few patients to form any group"}
+    res = worth_a_scan(scored, bar)
     res["survives"] = res["p_adjusted"] <= 0.05
     referred = t[t["cleared"] == 0]
     return {
