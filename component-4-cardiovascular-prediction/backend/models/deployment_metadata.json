@@ -1,0 +1,63 @@
+{
+  "project": "CardioLiver-AI: MASLD Cardiovascular Risk Prediction",
+  "version": "2.0.0",
+  "export_timestamp": "2026-10-19T16:23:41.082580",
+  "model_a_baseline": {
+    "algorithm": "Logistic Regression",
+    "description": "Traditional CVD Risk Factor Model (16 features)",
+    "test_roc_auc": 0.8508,
+    "features": [
+      "age",
+      "sex",
+      "bmi",
+      "diabetes",
+      "hypertension",
+      "smoker",
+      "systolic_bp",
+      "diastolic_bp",
+      "fasting_glucose",
+      "total_cholesterol",
+      "ldl",
+      "hdl",
+      "triglycerides",
+      "platelet_count",
+      "slcvd_score",
+      "who_cvd_risk"
+    ],
+    "artifact_file": "best_model_baseline.joblib"
+  },
+  "model_b_enhanced": {
+    "algorithm": "Logistic Regression",
+    "description": "Fibrosis-Enhanced CVD Risk Model (20 features)",
+    "test_roc_auc": 0.8812,
+    "features": [
+      "age",
+      "sex",
+      "bmi",
+      "diabetes",
+      "hypertension",
+      "smoker",
+      "systolic_bp",
+      "diastolic_bp",
+      "fasting_glucose",
+      "total_cholesterol",
+      "ldl",
+      "hdl",
+      "triglycerides",
+      "ast",
+      "alt",
+      "platelet_count",
+      "fibrosis_stage",
+      "fib_4_score",
+      "slcvd_score",
+      "who_cvd_risk"
+    ],
+    "artifact_file": "best_model_enhanced.joblib"
+  },
+  "incremental_gains": {
+    "delta_auc": 0.0305,
+    "continuous_nri": 0.6746,
+    "idi": 0.0519
+  },
+  "clinical_decision_threshold": 0.2
+}
