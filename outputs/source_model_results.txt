@@ -1,0 +1,5 @@
+Cohort: 1249 adult diabetics, 299 with fibrosis
+
+FIB-4: AUC 0.555 | flags 498 people, catches 137 of 299
+Logistic regression: AUC 0.767 | flags 498 people, catches 213 of 299
+Gradient boosting: AUC 0.697 | flags 498 people, catches 181 of 299
