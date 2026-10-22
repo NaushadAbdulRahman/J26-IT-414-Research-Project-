@@ -104,7 +104,14 @@ def main():
         raise ValueError('Pool oracle outcomes do not match the baseline endpoint.')
     initial_y = outcomes.loc[initial_ids, 'LUXSMED'].ge(threshold).astype(int)
     validation_y = outcomes.loc[validation_ids, 'LUXSMED'].ge(threshold).astype(int)
-    before = metrics(validation_y, baseline.predict_proba(X.loc[validation_ids])[:, 1])
+    baseline_probability = baseline.predict_proba(X.loc[validation_ids])[:, 1]
+    before = metrics(validation_y, baseline_probability)
+    # Preserve validation-only predictions so the UI can independently recalculate
+    # the reported metrics. These are never passed to a selection strategy.
+    validation_predictions = [pd.DataFrame({
+        'strategy': 'Initial model', 'SEQN': validation_ids,
+        'target': validation_y.to_numpy(), 'score': baseline_probability,
+    })]
     rows, selections = [], []
     for strategy, positions in choices.items():
         ids = pool_ids[positions]
@@ -119,7 +126,12 @@ def main():
                               colsample_bytree=1, tree_method='hist', n_jobs=1,
                               objective='binary:logistic', eval_metric='logloss', random_state=report['seed'])
         model.fit(training_X, training_y)
-        after = metrics(validation_y, model.predict_proba(X.loc[validation_ids])[:, 1])
+        probability_after = model.predict_proba(X.loc[validation_ids])[:, 1]
+        after = metrics(validation_y, probability_after)
+        validation_predictions.append(pd.DataFrame({
+            'strategy': strategy, 'SEQN': validation_ids,
+            'target': validation_y.to_numpy(), 'score': probability_after,
+        }))
         rows.append({'strategy': strategy, 'scans': len(ids),
                      'positive_scans_found': int(revealed.sum()),
                      'precision_at_k': float(revealed.mean()),
@@ -137,13 +149,19 @@ def main():
     result = pd.DataFrame(rows)
     result.to_csv(destination / 'strategy_comparison.csv', index=False)
     pd.DataFrame(selections).to_csv(destination / 'selected_patients.csv', index=False)
+    pd.concat(validation_predictions, ignore_index=True).to_csv(
+        destination / 'validation_predictions.csv', index=False)
     metadata = {'budget': args.budget, 'seed': report['seed'], 'hybrid_alpha': args.hybrid_alpha,
                 'baseline_validation': before, 'final_test_evaluated': False,
                 'scope': 'One batch and one split; exploratory, not evidence of a universal winner.',
                 'primary_demo_metric': 'positive_scans_found at equal scan budget',
                 'secondary_metrics': 'Validation discrimination and Brier score after retraining',
                 'fairness_constraint_implemented': False,
-                'endpoint': report['endpoint'], 'results': rows}
+                'endpoint': report['endpoint'], 'results': rows,
+                'input_sha256': report['input_sha256'],
+                'validation_predictions_file': 'validation_predictions.csv',
+                'validation_count': len(validation_ids),
+                'initial_label_count': len(initial_ids)}
     (destination / 'comparison_report.json').write_text(json.dumps(metadata, indent=2), encoding='utf-8')
     print(result.to_string(index=False, float_format=lambda x: f'{x:.4f}'))
     print(f'\nSaved: {destination}')
