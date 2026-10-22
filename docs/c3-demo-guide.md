@@ -8,6 +8,8 @@ python -m streamlit run app/Home.py
 
 Open **Component 3** in the sidebar. Explanations are always visible and information sections open expanded. The four tabs separate the workflow, selections, results and verification.
 
+If a comparison already exists, a banner identifies the saved budget and seed. Changing the budget or strategy loads saved outputs without training. **Re-run comparison for this budget** recomputes selections and independently retrains all five models. A budget with no saved comparison instead shows **Run comparison for this budget**. Repeating the same configuration reproduces one batch from the same starting point.
+
 ## How the code is organized
 
 These are supporting modules for one research component:
