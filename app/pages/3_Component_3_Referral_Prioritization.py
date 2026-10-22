@@ -103,6 +103,13 @@ if (folder / 'comparison_report.json').exists():
         load_error = str(exc)
         report = results = selected = predictors = None
 
+if report is not None:
+    st.info(f"Displaying saved results: {budget} scans per strategy, seed {report['seed']}. "
+            'Changing the budget or strategy displays existing outputs; it does not run a new experiment.')
+elif load_error is None:
+    st.info(f'No saved comparison for {budget} scans per strategy. '
+            'Open Selection demo and run the comparison to generate results.')
+
 overview, demo, comparison, evidence = st.tabs([
     '1 · Overview', '2 · Selection demo', '3 · Results explained', '4 · Verification & evidence'])
 
@@ -158,7 +165,11 @@ with demo:
             st.markdown(f'**{name} · {summary}**  \n{rule} {purpose}')
         st.caption('Diversity considers feature profiles. Equity requires an explicit subgroup '
                    'coverage rule and remains planned. Hybrid combines only uncertainty and diversity.')
-    if st.button('Run all five strategies at this budget', type='primary', key='c3_run'):
+    run_label = ('Re-run comparison for this budget' if report is not None
+                 else 'Run comparison for this budget')
+    if st.button(run_label, type='primary', key='c3_run',
+                 help='Recomputes selections and independently retrains all five models for this budget. '
+                      'Uses the same starting point rather than advancing to a new learning round.'):
         with st.spinner('Selecting one batch and independently retraining five models…'):
             try:
                 process = subprocess.run(
@@ -173,7 +184,7 @@ with demo:
             except (OSError, subprocess.TimeoutExpired) as exc:
                 st.error(f'Could not run the comparison: {exc}')
     if st.session_state.pop('c3_completed', None) == budget:
-        st.success('Comparison saved. Same initial model, waiting pool and budget for every strategy.')
+        st.success('Comparison completed and saved. Same initial model, waiting pool and budget for every strategy.')
     st.caption('One batch from the same starting point. Repeating a run reproduces the experiment, '
                'rather than advancing to another month. Retraining happens during the run.')
     if load_error:
