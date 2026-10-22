@@ -7,6 +7,8 @@ Run  python src/run_all.py  first, so the trained model exists.
 Inside the group's shared app the same screens appear as
 app/pages/1_Component_1_Fibrosis_Referral.py (see views.py).
 """
+import shared.transport
+import shared.session
 import streamlit as st
 
 st.set_page_config(page_title="Fibrosis referral", layout="wide", initial_sidebar_state="expanded")
