@@ -7,7 +7,6 @@ data/interim/
 *.XPT
 *.csv
 .DS_Store
-.env
 
 # Local Streamlit skill link
 .agents/skills/developing-with-streamlit
@@ -20,3 +19,5 @@ data/interim/
 !**/outputs/.gitkeep
 # Python
 .venv/
+config.bat
+node_modules
