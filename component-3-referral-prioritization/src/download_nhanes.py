@@ -1,6 +1,6 @@
 """Download and validate C3's NHANES 2017-March 2020 source files.
 
-Run from the repository root: python scripts/download_nhanes.py
+Run from the repository root: python component-3-referral-prioritization/src/download_nhanes.py
 This step does not filter a cohort, create clinical labels or train a model.
 """
 from datetime import datetime, timezone
@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DESTINATION = ROOT / 'data' / 'raw' / 'nhanes_2017_2020'
 BASE_URL = 'https://wwwn.cdc.gov/Nchs/Data/Nhanes/Public/2017/DataFiles/'
 

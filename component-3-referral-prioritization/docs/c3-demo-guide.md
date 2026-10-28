@@ -16,11 +16,12 @@ These are supporting modules for one research component:
 
 | File | Responsibility |
 | --- | --- |
-| `app/pages/3_Component_3_Referral_Prioritization.py` | The Streamlit page, controls and displayed results |
-| `app/c3_verification.py` | Strategy descriptions and reusable functions that check saved outputs |
-| `scripts/train_c3_baseline.py` | Data splits and initial XGBoost training |
-| `scripts/compare_c3_strategies.py` | Patient selection, independent retraining and output exports |
-| `tests/test_c3_verification.py` | Checks that verification accepts valid evidence and rejects incorrect evidence |
+| `app/pages/3_Component_3_Referral_Prioritization.py` | Shared navigation entry |
+| `component-3-referral-prioritization/src/dashboard.py` | The Streamlit dashboard, controls and displayed results |
+| `component-3-referral-prioritization/src/c3_verification.py` | Strategy descriptions and reusable functions that check saved outputs |
+| `component-3-referral-prioritization/src/train_c3_baseline.py` | Data splits and initial XGBoost training |
+| `component-3-referral-prioritization/src/compare_c3_strategies.py` | Patient selection, independent retraining and output exports |
+| `component-3-referral-prioritization/tests/test_c3_verification.py` | Checks that verification accepts valid evidence and rejects incorrect evidence |
 
 Viva explanation: "This is one component organized into modules. The page handles the interface, the scripts run the experiment, and the verification helper checks the saved results."
 
@@ -52,7 +53,7 @@ This verifies file and numerical consistency. It does not establish clinical val
 Older result folders can still be displayed if their metadata and basic numeric checks pass. To enable validation-metric recomputation, rerun a budget once using the updated comparison script:
 
 ```bash
-python scripts/compare_c3_strategies.py --budget 20
+python component-3-referral-prioritization/src/compare_c3_strategies.py --budget 20
 ```
 
 The script now writes `validation_predictions.csv` (initial model and five retrained models on validation patients). It records input hashes, validation size and initial label size in the comparison report. Selection policies, the XGBoost settings and evaluation split remain the same.
@@ -68,23 +69,5 @@ Generated CSVs and patient-level records stay ignored by Git. Only code and docu
 Run the focused checks from the repository root:
 
 ```bash
-python -m unittest discover -s tests -p test_c3_verification.py -v
+python -m unittest discover -s component-3-referral-prioritization/tests -p test_c3_verification.py -v
 ```
-
-## Suggested commits
-
-First commit the evidence export, verification helper and meaningful checks:
-
-```bash
-git add scripts/compare_c3_strategies.py app/c3_verification.py tests/test_c3_verification.py
-git commit -m "feat(c3): export validation predictions and verify experiment outputs"
-```
-
-Then commit the guided interface and demo instructions:
-
-```bash
-git add app/pages/3_Component_3_Referral_Prioritization.py docs/c3-demo-guide.md
-git commit -m "feat(c3): add guided Streamlit demo and metric explanation cards"
-```
-
-Push your feature branch and open a pull request into `main` after inspecting the page locally.

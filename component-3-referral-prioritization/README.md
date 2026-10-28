@@ -11,7 +11,7 @@
 - **Stage:** Progress Presentation 1 (PP1), October 2026
 - **Group project:** Machine-Learning Investigation of Non-Invasive Significant Liver Fibrosis Screening in MASLD
 
-This README documents Component 3 within the shared four-member research project. This folder contains component documentation; the implementation remains in the shared `scripts/`, `app/` and `tests/` directories. Run all commands from the repository root unless stated otherwise.
+This README documents Component 3 within the shared four-member research project. This folder contains the C3 implementation, tests, dependency pins and documentation. A thin page in `app/pages/` connects its dashboard to the shared Streamlit navigation. Run all commands from the repository root unless stated otherwise.
 
 **Repository:** https://github.com/NaushadAbdulRahman/J26-IT-414-Research-Project-
 
@@ -65,16 +65,16 @@ XGBoost takes age, sex, BMI, AST, ALT, platelet count and diabetes indicators as
 From the repository root:
 
 ```bash
-python -m pip install -r requirements-c3.txt
-python scripts/download_nhanes.py
-python scripts/prepare_nhanes.py
-python scripts/train_c3_baseline.py --threshold-kpa 8
-python scripts/compare_c3_strategies.py --budget 20
-python -m unittest discover -s tests -p test_c3_verification.py -v
+python -m pip install -r component-3-referral-prioritization/requirements.txt
+python component-3-referral-prioritization/src/download_nhanes.py
+python component-3-referral-prioritization/src/prepare_nhanes.py
+python component-3-referral-prioritization/src/train_c3_baseline.py --threshold-kpa 8
+python component-3-referral-prioritization/src/compare_c3_strategies.py --budget 20
+python -m unittest discover -s component-3-referral-prioritization/tests -p test_c3_verification.py -v
 python -m streamlit run app/Home.py
 ```
 
-`requirements-c3.txt` records additional version pins for reproducing the C3 environment. Use a separate virtual environment if another component requires different versions.
+`component-3-referral-prioritization/requirements.txt` records additional version pins for reproducing the C3 environment. Use a separate virtual environment if another component requires different versions.
 
 The C3 downloader fetches six files into `data/raw/nhanes_2017_2020/`. It does not fetch `P_GHB.xpt`, which C1 and C2 require. Prepared C3 data and experiment outputs go under `data/interim/nhanes_2017_2020/`.
 
@@ -113,11 +113,12 @@ The four dashboard tabs cover the overview, selection demo, result explanations 
 
 | File | Responsibility |
 | --- | --- |
-| `app/pages/3_Component_3_Referral_Prioritization.py` | Streamlit controls and displayed results |
-| `app/c3_verification.py` | Strategy descriptions and reusable output-verification functions |
-| `scripts/train_c3_baseline.py` | Splits, initial training and baseline report |
-| `scripts/compare_c3_strategies.py` | Five independent selection/retraining experiments and output exports |
-| `tests/test_c3_verification.py` | 13 focused verification tests using synthetic fixtures |
+| `app/pages/3_Component_3_Referral_Prioritization.py` | Shared navigation entry that launches the C3 dashboard |
+| `component-3-referral-prioritization/src/dashboard.py` | Streamlit controls and displayed results |
+| `component-3-referral-prioritization/src/c3_verification.py` | Strategy descriptions and reusable output-verification functions |
+| `component-3-referral-prioritization/src/train_c3_baseline.py` | Splits, initial training and baseline report |
+| `component-3-referral-prioritization/src/compare_c3_strategies.py` | Five independent selection/retraining experiments and output exports |
+| `component-3-referral-prioritization/tests/test_c3_verification.py` | 13 focused verification tests using synthetic fixtures |
 
 The verification button checks partition IDs, scan budgets, unique selected patients, recorded outcomes, positive counts, precision and input-file SHA-256 fingerprints. It also recomputes AUROC, average precision and Brier score from `validation_predictions.csv`. Missing evidence is reported as unavailable, rather than counted as a pass. Rerun older comparison folders once to create this prediction export.
 
@@ -125,7 +126,7 @@ These checks establish numerical and file consistency. Statistical reliability s
 
 **Planned research:** sequential acquisition rounds, repeated trials and learning curves, an XGBoost-informed acquisition extension, explicit equity constraints, budget sensitivity analysis and a statistical plateau rule. Their novelty and benefit still need literature support and experimental evaluation. A learning plateau concerns model improvement from additional labels, rather than when clinical scans should stop.
 
-Details: [C3 demonstration and evidence guide](https://github.com/NaushadAbdulRahman/J26-IT-414-Research-Project-/blob/main/docs/c3-demo-guide.md)
+Details: [C3 demonstration and evidence guide](docs/c3-demo-guide.md)
 
 ## Implementation status at PP1
 
@@ -138,3 +139,21 @@ Details: [C3 demonstration and evidence guide](https://github.com/NaushadAbdulRa
 Patient-level data, generated exports, credentials and local environment files must not be committed to the repository. Raw and prepared data remain local under the repository's Git ignore rules.
 
 **Research use only. This prototype is not intended for clinical decision-making.**
+
+## Component layout
+
+| Path within this component | Purpose |
+| --- | --- |
+| `src/dashboard.py` | C3 Streamlit dashboard |
+| `src/download_nhanes.py` | Download and validate source files |
+| `src/prepare_nhanes.py` | Prepare predictors, outcomes and cohort audit |
+| `src/train_c3_baseline.py` | Initial model and data partitions |
+| `src/compare_c3_strategies.py` | Five selection and retraining experiments |
+| `src/c3_verification.py` | Verify saved experiment outputs |
+| `tests/test_c3_verification.py` | Output-verification tests |
+| `docs/` | Demonstration guide and research plan |
+| `requirements.txt` | C3 dependency pins, including shared requirements |
+
+The shared navigation entry is `app/pages/3_Component_3_Referral_Prioritization.py`. Launch the application with `python -m streamlit run app/Home.py` from the repository root.
+
+Existing data and generated results remain under the repository-level `data/raw/nhanes_2017_2020/` and `data/interim/nhanes_2017_2020/`. No data migration or retraining is required for this folder reorganization. Earlier PP1 submission copies describe the previous file locations; use the commands above for this version.

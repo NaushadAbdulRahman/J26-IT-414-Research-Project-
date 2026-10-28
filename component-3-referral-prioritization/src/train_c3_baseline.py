@@ -1,6 +1,6 @@
 """Train a reproducible all-adult baseline for the C3 retrospective demo.
 
-python scripts/train_c3_baseline.py --threshold-kpa 8
+python component-3-referral-prioritization/src/train_c3_baseline.py --threshold-kpa 8
 No pool outcomes or final test data are used for fitting or validation.
 """
 import argparse
@@ -16,7 +16,7 @@ from sklearn.model_selection import train_test_split
 import xgboost
 from xgboost import XGBClassifier
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / 'data/interim/nhanes_2017_2020'
 CORE = ['RIDAGEYR', 'RIAGENDR', 'BMXBMI', 'LBXSASSI', 'LBXSATSI', 'LBXPLTSI']
 DIABETES = ['diabetes_yes', 'diabetes_borderline', 'diabetes_unknown']

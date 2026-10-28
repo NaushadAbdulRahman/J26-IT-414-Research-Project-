@@ -1,7 +1,7 @@
 """Compare one scan batch across five independent strategy simulations.
 
 Run after train_c3_baseline.py:
-python scripts/compare_c3_strategies.py --budget 20
+python component-3-referral-prioritization/src/compare_c3_strategies.py --budget 20
 This exploratory comparison does not establish a statistically reliable winner.
 """
 import argparse

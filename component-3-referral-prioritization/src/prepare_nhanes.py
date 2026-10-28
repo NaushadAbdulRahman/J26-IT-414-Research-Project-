@@ -1,6 +1,6 @@
 """Join NHANES source files and audit candidate cohorts; no model training.
 
-Run: python scripts/prepare_nhanes.py
+Run: python component-3-referral-prioritization/src/prepare_nhanes.py
 Outputs stay in git-ignored data/interim/nhanes_2017_2020.
 """
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / 'data/raw/nhanes_2017_2020'
 OUTPUT = ROOT / 'data/interim/nhanes_2017_2020'
 COLUMNS = {
@@ -26,7 +26,7 @@ SCAN_COLUMNS = COLUMNS['P_LUX'][1:]
 def read_source(name):
     path = SOURCE / f'{name}.xpt'
     if not path.exists():
-        raise FileNotFoundError(f'{path}: run scripts/download_nhanes.py first.')
+        raise FileNotFoundError(f'{path}: run component-3-referral-prioritization/src/download_nhanes.py first.')
     frame = pd.read_sas(path, format='xport')[COLUMNS[name]]
     if frame.empty or frame.SEQN.isna().any() or frame.SEQN.duplicated().any():
         raise ValueError(f'{name}: empty source or missing/duplicate SEQN.')

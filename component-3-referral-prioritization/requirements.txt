@@ -1,4 +1,4 @@
--r requirements.txt
+-r ../requirements.txt
 
 xgboost==3.4.1
 scikit-learn==1.9.1

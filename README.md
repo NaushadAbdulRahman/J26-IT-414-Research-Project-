@@ -138,16 +138,16 @@ XGBoost takes age, sex, BMI, AST, ALT, platelet count and diabetes indicators as
 From the repository root:
 
 ```bash
-python -m pip install -r requirements-c3.txt
-python scripts/download_nhanes.py
-python scripts/prepare_nhanes.py
-python scripts/train_c3_baseline.py --threshold-kpa 8
-python scripts/compare_c3_strategies.py --budget 20
-python -m unittest discover -s tests -p test_c3_verification.py -v
+python -m pip install -r component-3-referral-prioritization/requirements.txt
+python component-3-referral-prioritization/src/download_nhanes.py
+python component-3-referral-prioritization/src/prepare_nhanes.py
+python component-3-referral-prioritization/src/train_c3_baseline.py --threshold-kpa 8
+python component-3-referral-prioritization/src/compare_c3_strategies.py --budget 20
+python -m unittest discover -s component-3-referral-prioritization/tests -p test_c3_verification.py -v
 python -m streamlit run app/Home.py
 ```
 
-`requirements-c3.txt` records additional version pins for reproducing the C3 environment. Use a separate virtual environment if another component requires different versions.
+`component-3-referral-prioritization/requirements.txt` records additional version pins for reproducing the C3 environment. Use a separate virtual environment if another component requires different versions.
 
 The C3 downloader fetches six files into `data/raw/nhanes_2017_2020/`. It does not fetch `P_GHB.xpt`, which C1 and C2 require. Prepared C3 data and experiment outputs go under `data/interim/nhanes_2017_2020/`.
 
@@ -186,11 +186,12 @@ The four dashboard tabs cover the overview, selection demo, result explanations 
 
 | File | Responsibility |
 | --- | --- |
-| `app/pages/3_Component_3_Referral_Prioritization.py` | Streamlit controls and displayed results |
-| `app/c3_verification.py` | Strategy descriptions and reusable output-verification functions |
-| `scripts/train_c3_baseline.py` | Splits, initial training and baseline report |
-| `scripts/compare_c3_strategies.py` | Five independent selection/retraining experiments and output exports |
-| `tests/test_c3_verification.py` | 13 focused verification tests using synthetic fixtures |
+| `app/pages/3_Component_3_Referral_Prioritization.py` | Shared navigation entry that launches the C3 dashboard |
+| `component-3-referral-prioritization/src/dashboard.py` | Streamlit controls and displayed results |
+| `component-3-referral-prioritization/src/c3_verification.py` | Strategy descriptions and reusable output-verification functions |
+| `component-3-referral-prioritization/src/train_c3_baseline.py` | Splits, initial training and baseline report |
+| `component-3-referral-prioritization/src/compare_c3_strategies.py` | Five independent selection/retraining experiments and output exports |
+| `component-3-referral-prioritization/tests/test_c3_verification.py` | 13 focused verification tests using synthetic fixtures |
 
 The verification button checks partition IDs, scan budgets, unique selected patients, recorded outcomes, positive counts, precision and input-file SHA-256 fingerprints. It also recomputes AUROC, average precision and Brier score from `validation_predictions.csv`. Missing evidence is reported as unavailable, rather than counted as a pass. Rerun older comparison folders once to create this prediction export.
 
@@ -198,7 +199,7 @@ These checks establish numerical and file consistency. Statistical reliability s
 
 **Planned research:** sequential acquisition rounds, repeated trials and learning curves, an XGBoost-informed acquisition extension, explicit equity constraints, budget sensitivity analysis and a statistical plateau rule. Their novelty and benefit still need literature support and experimental evaluation. A learning plateau concerns model improvement from additional labels, rather than when clinical scans should stop.
 
-Details: [Component 3 README](component-3-referral-prioritization/README.md), [C3 demonstration and evidence guide](docs/c3-demo-guide.md)
+Details: [Component 3 README](component-3-referral-prioritization/README.md), [C3 demonstration and evidence guide](component-3-referral-prioritization/docs/c3-demo-guide.md)
 
 ## Component 4: cardiovascular risk prediction and explainability
 
@@ -229,13 +230,11 @@ Details: [Component 4 README](component-4-cardiovascular-prediction/README.md)
 | `app/pages/` | C1, C2 and C3 pages |
 | `component-1-fibrosis-screening/` | C1 pipeline, standalone app and tests |
 | `component-2-failure-finder/` | C2 audits, patient checks, documentation and tests |
-| `component-3-referral-prioritization/` | C3 component README; implementation remains in shared scripts, app and tests |
+| `component-3-referral-prioritization/` | C3 source, dashboard, tests, dependencies and documentation |
 | `component-4-cardiovascular-prediction/` | C4 backend, frontend, notebook and model artifacts |
-| `scripts/` | C3 data preparation, training and comparison scripts |
 | `shared/fib4.py` | Reusable FIB-4 calculation and rule definitions |
 | `src/` | Earlier cohort preparation and supporting research scripts, including C2 cohort preparation |
-| `tests/` | Root-level C3 verification tests |
-| `docs/` | Component plans, diagrams and demonstration instructions |
+| Component `docs/` folders | Component plans and demonstration instructions |
 | `data/` and component-specific data folders | Local datasets and generated records, excluded by Git rules |
 
 ## Current limitations and next evaluation
