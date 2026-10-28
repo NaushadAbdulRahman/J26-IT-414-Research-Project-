@@ -198,7 +198,7 @@ These checks establish numerical and file consistency. Statistical reliability s
 
 **Planned research:** sequential acquisition rounds, repeated trials and learning curves, an XGBoost-informed acquisition extension, explicit equity constraints, budget sensitivity analysis and a statistical plateau rule. Their novelty and benefit still need literature support and experimental evaluation. A learning plateau concerns model improvement from additional labels, rather than when clinical scans should stop.
 
-Details: [C3 demonstration and evidence guide](docs/c3-demo-guide.md)
+Details: [Component 3 README](component-3-referral-prioritization/README.md), [C3 demonstration and evidence guide](docs/c3-demo-guide.md)
 
 ## Component 4: cardiovascular risk prediction and explainability
 
@@ -229,6 +229,7 @@ Details: [Component 4 README](component-4-cardiovascular-prediction/README.md)
 | `app/pages/` | C1, C2 and C3 pages |
 | `component-1-fibrosis-screening/` | C1 pipeline, standalone app and tests |
 | `component-2-failure-finder/` | C2 audits, patient checks, documentation and tests |
+| `component-3-referral-prioritization/` | C3 component README; implementation remains in shared scripts, app and tests |
 | `component-4-cardiovascular-prediction/` | C4 backend, frontend, notebook and model artifacts |
 | `scripts/` | C3 data preparation, training and comparison scripts |
 | `shared/fib4.py` | Reusable FIB-4 calculation and rule definitions |
